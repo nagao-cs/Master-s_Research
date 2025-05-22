@@ -55,7 +55,7 @@ def get_image_point(loc, K, w2c):
 client = carla.Client('localhost', 2000)
 client.set_timeout(10.0)
 
-# マップ変更（Town05は交差点多め
+# マップ変更
 print(client.get_available_maps())
 map = 'Town10HD_Opt'
 client.load_world(map)
@@ -65,7 +65,7 @@ blueprint_library = world.get_blueprint_library()
 # === 同期モード設定 ===
 settings = world.get_settings()
 settings.synchronous_mode = True
-settings.fixed_delta_seconds = 0.05  # シミュレーション1ステップ = 0.5秒
+settings.fixed_delta_seconds = 0.05  # シミュレーション1ステップ = 0.05秒
 world.apply_settings(settings)
 
 # === トラフィックマネージャも同期モードに ===
@@ -126,7 +126,7 @@ camera_bp.set_attribute('image_size_y', str(IM_HEIGHT))
 camera_bp.set_attribute('fov', str(FOV))
 camera_transform = carla.Transform(carla.Location(x=1.5, z=2.4))
 camera = world.spawn_actor(camera_bp, camera_transform, attach_to=ego_vehicle)
-# Create a queue to store and retrieve the sensor data
+
 image_queue = queue.Queue()
 print("Camera attached")
 
@@ -145,6 +145,7 @@ ego_vehicle.set_autopilot(True)
 print("Befor running Simulation")
 
 TIME_DURATION = 1000
+VALID_DISTANCE = 50
 try:
     print("Running simulation... Press 'q' to stop.")
 
@@ -194,13 +195,7 @@ try:
                 bb = npc.bounding_box
                 dist = npc.get_transform().location.distance(ego_vehicle.get_transform().location)
 
-                # Filter for the vehicles within 50m
-                if dist < 50:
-
-                # Calculate the dot product between the forward vector
-                # of the vehicle and the vector between the vehicle
-                # and the other vehicle. We threshold this dot product
-                # to limit to drawing bounding boxes IN FRONT OF THE CAMERA
+                if dist < VALID_DISTANCE:
                     forward_vec = ego_vehicle.get_transform().get_forward_vector()
                     ray = npc.get_transform().location - ego_vehicle.get_transform().location
 

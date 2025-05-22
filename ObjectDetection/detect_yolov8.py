@@ -6,8 +6,7 @@ import numpy as np
 
 def detect_and_save_results(image_dir, output_dir, model_path='yolov8n.pt', confidence_threshold=0.25):
     """
-    指定されたディレクトリ内の各画像に対してYOLOv8で物体検出を行い、
-    結果を画像とテキストで保存します。
+    指定されたディレクトリ内の各画像に対してYOLOv8で物体検出を行い、結果を画像とテキストで保存
 
     Args:
         image_dir (str): 物体検出を行う画像が保存されているディレクトリのパス。
@@ -39,9 +38,7 @@ def detect_and_save_results(image_dir, output_dir, model_path='yolov8n.pt', conf
             print(f"Processing image: {filename}")
 
             try:
-                # 画像をPILで開く（OpenCVで読み込むことも可能だが、UltralyticsはPIL/numpy形式を好む場合がある）
-                # results = model(image_path, conf=confidence_threshold) # これでも動作する
-                
+                # 画像をPILで開く
                 # 画像をOpenCVで読み込み、RGBに変換
                 img_cv2 = cv2.imread(image_path)
                 if img_cv2 is None:
@@ -103,18 +100,13 @@ def detect_and_save_results(image_dir, output_dir, model_path='yolov8n.pt', conf
                 print(f"Error processing {filename}: {e}")
 
 if __name__ == "__main__":
-    # ここに入力ディレクトリと出力ディレクトリのパスを指定してください
-    input_images_directory = "C:\CARLA_Latest\WindowsNoEditor\PythonAPI\examples\output\images"  # 例: "my_images"
-    output_results_directory = "yolov8_results"      # 例: "output_detections"
+    input_images_directory = "C:\CARLA_Latest\WindowsNoEditor\PythonAPI\examples\output\images"
+    output_results_directory = "yolov8_results"
 
     # 使用するYOLOv8モデルのパス
-    # 事前にダウンロードしたい場合は以下のように実行:
-    # from ultralytics import YOLO
-    # YOLO('yolov8n.pt').export(format='pt') # 'pt'形式でダウンロード
-    yolov8_model_to_use = 'yolov8n.pt' # 'yolov8s.pt', 'yolov8m.pt' なども選択可能
-
+    yolov8_model_to_use = 'yolov8n.pt' 
     # 信頼度閾値
-    conf_threshold = 0.5 # 検出結果の信頼度がこの値以上の場合に保存
+    conf_threshold = 0.5
 
     detect_and_save_results(input_images_directory, output_results_directory, yolov8_model_to_use, conf_threshold)
     print("All images processed. Check the 'yolov8_results' directory.")

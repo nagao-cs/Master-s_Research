@@ -7,6 +7,7 @@ import time
 import queue
 import numpy as np
 import cv2
+import csv
 
 # === Carla Egg のパス設定 ===
 try:
@@ -51,13 +52,23 @@ def get_image_point(loc, K, w2c):
 
         return point_img[0:2]
 
+def point_in_canvas(pos, img_h, img_w):
+    """Return true if point is in canvas"""
+    if (pos[0] >= 0) and (pos[0] < img_w) and (pos[1] >= 0) and (pos[1] < img_h):
+        return True
+    return False
+
+TIME_DURATION = 1000
+VALID_DISTANCE = 50
+FIXED_DELTA_SECONDS = 0.05
+
 # === Carlaサーバに接続 ===
 client = carla.Client('localhost', 2000)
 client.set_timeout(10.0)
 
 # マップ変更
 print(client.get_available_maps())
-map = 'Town10HD_Opt'
+map = 'Town01_Opt'
 client.load_world(map)
 world = client.get_world()
 blueprint_library = world.get_blueprint_library()
@@ -65,7 +76,7 @@ blueprint_library = world.get_blueprint_library()
 # === 同期モード設定 ===
 settings = world.get_settings()
 settings.synchronous_mode = True
-settings.fixed_delta_seconds = 0.05  # シミュレーション1ステップ = 0.05秒
+settings.fixed_delta_seconds = FIXED_DELTA_SECONDS  # シミュレーション1ステップ = 0.05秒
 world.apply_settings(settings)
 
 # === トラフィックマネージャも同期モードに ===
@@ -131,7 +142,8 @@ image_queue = queue.Queue()
 print("Camera attached")
 
 # 保存用ディレクトリ作成
-os.makedirs("output/images", exist_ok=True)
+os.makedirs("C:\CARLA_Latest\WindowsNoEditor\output\images", exist_ok=True)
+os.makedirs("C:\CARLA_Latest\WindowsNoEditor\output\labels", exist_ok=True)
 
 # カメラ行列の計算
 K = build_projection_matrix(IM_WIDTH, IM_HEIGHT, FOV)
@@ -142,19 +154,28 @@ def save_image(image):
 
 # === シミュレーション開始 ===
 ego_vehicle.set_autopilot(True)
-print("Befor running Simulation")
 
-TIME_DURATION = 1000
-VALID_DISTANCE = 50
+# Bounding Box情報を保存するCSVファイルを開く
+# bbox_filename = "output/labels/bounding_boxes.csv"
+# bbox_file = open(bbox_filename, 'w', newline='')
+# bbox_writer = csv.writer(bbox_file)
+# # ヘッダー行を書き込む
+# bbox_writer.writerow([
+#     'frame_id', 'object_id', 'object_label',
+#     '3d_loc_x', '3d_loc_y', '3d_loc_z',
+#     '3d_extent_x', '3d_extent_y', '3d_extent_z',
+#     '2d_bbox_xmin', '2d_bbox_ymin', '2d_bbox_xmax', '2d_bbox_ymax'
+# ])
+
 try:
     print("Running simulation... Press 'q' to stop.")
-
     duration_sec = TIME_DURATION
+    num_frames = int(duration_sec / FIXED_DELTA_SECONDS)
 
     # カメラのリスナーを設定
     camera.listen(image_queue.put)
 
-    for _ in range(duration_sec):
+    for frame_idx in range(num_frames):
         world.tick() # シミュレーションを進める
         
         # カメラからの画像をキューから取得
@@ -164,31 +185,43 @@ try:
         img = np.reshape(np.copy(image.raw_data), (image.height, image.width, 4))
 
         # ワールドからカメラへの変換行列を取得
-        world_2_camera = np.array(camera.get_transform().get_inverse_matrix())
+        world_to_camera = np.array(camera.get_transform().get_inverse_matrix())
+        # Get the attributes from the camera
+        image_w = camera_bp.get_attribute("image_size_x").as_int()
+        image_h = camera_bp.get_attribute("image_size_y").as_int()
+        fov = camera_bp.get_attribute("fov").as_float()
 
-        # すべてのオブジェクトのbounding boxを取得
+        # Calculate the camera projection matrix to project from 3D -> 2D
+        K = build_projection_matrix(image_w, image_h, fov)
+        K_b = build_projection_matrix(image_w, image_h, fov, is_behind_camera=True)
+
         # carla.CityObjectLabel.Vehicles, carla.CityObjectLabel.Pedestrians などでフィルタリング可能
-        bounding_boxes = world.get_level_bbs(carla.CityObjectLabel.Vehicles) 
+        bounding_boxes = world.get_level_bbs(carla.CityObjectLabel.TrafficLight
+)
+        bounding_boxes.extend(world.get_level_bbs(carla.CityObjectLabel.TrafficSigns))
+        bounding_boxes.extend(world.get_level_bbs(carla.CityObjectLabel.Vehicles))
         edges = [[0,1], [1,3], [3,2], [2,0], [0,4], [4,5], [5,1], [5,7], [7,6], [6,4], [6,2], [7,3]]
 
-        # # bounding boxの描画
-        # for bbox in bounding_boxes:
-        #     # Ego車両からの距離でフィルタリング（例: 50m以内）
-        #     if bbox.location.distance(ego_vehicle.get_transform().location) < 50:
-        #         forward_vec = ego_vehicle.get_transform().get_forward_vector()
-        #         ray = bbox.location - ego_vehicle.get_transform().location
+        # bounding boxの描画
+        for bbox in bounding_boxes:
+            if bbox.location == ego_vehicle.bounding_box.location:
+                continue
+            # Ego車両からの距離でフィルタリング（例: 50m以内）
+            if 0.1 < bbox.location.distance(ego_vehicle.get_transform().location) < VALID_DISTANCE:
+                forward_vec = ego_vehicle.get_transform().get_forward_vector()
+                ray = bbox.location - ego_vehicle.get_transform().location
 
-        #         if forward_vec.dot(ray) > 0:
-        #             # Cycle through the vertices
-        #             verts = [v for v in bbox.get_world_vertices(carla.Transform())]
-        #             for edge in edges:
-        #                 # Join the vertices into edges
-        #                 p1 = get_image_point(verts[edge[0]], K, world_2_camera)
-        #                 p2 = get_image_point(verts[edge[1]],  K, world_2_camera)
-        #                 # Draw the edges into the camera output
-        #                 cv2.line(img, (int(p1[0]),int(p1[1])), (int(p2[0]),int(p2[1])), (0,0,255, 255), 1)
+                if forward_vec.dot(ray) > 0:
+                    # Cycle through the vertices
+                    verts = [v for v in bbox.get_world_vertices(carla.Transform())]
+                    for edge in edges:
+                        # Join the vertices into edges
+                        p1 = get_image_point(verts[edge[0]], K, world_to_camera)
+                        p2 = get_image_point(verts[edge[1]],  K, world_to_camera)
+                        # Draw the edges into the camera output
+                        cv2.line(img, (int(p1[0]),int(p1[1])), (int(p2[0]),int(p2[1])), (0,0,255, 255), 1)
 
-        for npc in world.get_actors().filter('*vehicle*'):
+        for npc in world.get_actors().filter('*vehicle*' or '*pedestrian*'):
             # Filter out the ego vehicle
             if npc.id != ego_vehicle.id:
 
@@ -200,32 +233,28 @@ try:
                     ray = npc.get_transform().location - ego_vehicle.get_transform().location
 
                     if forward_vec.dot(ray) > 0:
-                        p1 = get_image_point(bb.location, K, world_2_camera)
                         verts = [v for v in bb.get_world_vertices(npc.get_transform())]
-                        x_max = -10000
-                        x_min = 10000
-                        y_max = -10000
-                        y_min = 10000
+                        for edge in edges:
+                            p1 = get_image_point(verts[edge[0]], K, world_to_camera)
+                            p2 = get_image_point(verts[edge[1]],  K, world_to_camera)
 
-                        for vert in verts:
-                            p = get_image_point(vert, K, world_2_camera)
-                            # Find the rightmost vertex
-                            if p[0] > x_max:
-                                x_max = p[0]
-                            # Find the leftmost vertex
-                            if p[0] < x_min:
-                                x_min = p[0]
-                            # Find the highest vertex
-                            if p[1] > y_max:
-                                y_max = p[1]
-                            # Find the lowest  vertex
-                            if p[1] < y_min:
-                                y_min = p[1]
+                            p1_in_canvas = point_in_canvas(p1, image_h, image_w)
+                            p2_in_canvas = point_in_canvas(p2, image_h, image_w)
 
-                        cv2.line(img, (int(x_min),int(y_min)), (int(x_max),int(y_min)), (0,0,255, 255), 1)
-                        cv2.line(img, (int(x_min),int(y_max)), (int(x_max),int(y_max)), (0,0,255, 255), 1)
-                        cv2.line(img, (int(x_min),int(y_min)), (int(x_min),int(y_max)), (0,0,255, 255), 1)
-                        cv2.line(img, (int(x_max),int(y_min)), (int(x_max),int(y_max)), (0,0,255, 255), 1)
+                            if not p1_in_canvas and not p2_in_canvas:
+                                continue
+
+                            ray0 = verts[edge[0]] - camera.get_transform().location
+                            ray1 = verts[edge[1]] - camera.get_transform().location
+                            cam_forward_vec = camera.get_transform().get_forward_vector()
+
+                            # One of the vertex is behind the camera
+                            if not (cam_forward_vec.dot(ray0) > 0):
+                                p1 = get_image_point(verts[edge[0]], K_b, world_to_camera)
+                            if not (cam_forward_vec.dot(ray1) > 0):
+                                p2 = get_image_point(verts[edge[1]], K_b, world_to_camera)
+
+                            cv2.line(img, (int(p1[0]),int(p1[1])), (int(p2[0]),int(p2[1])), (255,0,0, 255), 1)        
 
         # 画像を表示
         cv2.namedWindow('Carla Camera with Bounding Boxes', cv2.WINDOW_AUTOSIZE)

@@ -122,7 +122,7 @@ for _ in range(n_walker):
 print("npc walker spawned")
 
 # === Ego車両スポーン（最後） ===
-ego_bp = blueprint_library.find('vehicle.tesla.model3')
+ego_bp = blueprint_library.find('vehicle.lincoln.mkz_2020')
 ego_transform = spawn_points[0]
 ego_vehicle = world.try_spawn_actor(ego_bp, ego_transform)
 print("hero appeared")
@@ -135,7 +135,7 @@ camera_bp = blueprint_library.find('sensor.camera.rgb')
 camera_bp.set_attribute('image_size_x', str(IM_WIDTH))
 camera_bp.set_attribute('image_size_y', str(IM_HEIGHT))
 camera_bp.set_attribute('fov', str(FOV))
-camera_transform = carla.Transform(carla.Location(x=1.5, z=2.4))
+camera_transform = carla.Transform(carla.Location(x=2.0, z=2.0))
 camera = world.spawn_actor(camera_bp, camera_transform, attach_to=ego_vehicle)
 
 image_queue = queue.Queue()

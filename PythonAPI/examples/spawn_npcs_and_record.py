@@ -67,10 +67,33 @@ client = carla.Client('localhost', 2000)
 client.set_timeout(10.0)
 
 # マップ変更
-print(client.get_available_maps())
-map = 'Town01_Opt'
-client.load_world(map)
-world = client.get_world()
+# print(client.get_available_maps())
+# map = 'Town01_Opt'
+# client.load_world(map)
+# world = client.get_world()
+# blueprint_library = world.get_blueprint_library()
+# マップ名
+map = 'Town10HD_Opt' # またはあなたの使用しているマップ名
+
+# ワールドをロードする際に、'ParkedVehicles' レイヤーを除外する
+# 他の必要なレイヤーは含める
+desired_map_layers = (
+    carla.MapLayer.Ground |
+    carla.MapLayer.Walls |
+    carla.MapLayer.Buildings |
+    carla.MapLayer.Foliage |
+    # carla.MapLayer.ParkedVehicles | # これをコメントアウトまたは含めない
+    carla.MapLayer.Props |
+    carla.MapLayer.StreetLights
+)
+# ワールドをロード
+# client.load_world() の第二引数に map_layers を渡す
+world = client.load_world(map, reset_settings=True, map_layers=desired_map_layers)
+# reset_settings=True は、前回のシミュレーション設定（同期モードなど）をリセットします。
+# 通常は load_world の後に同期モード設定などを再適用する必要があります。
+
+print(f"Loaded world '{map}' with specific layers. Parked vehicles should be gone.")
+
 blueprint_library = world.get_blueprint_library()
 
 # === 同期モード設定 ===
@@ -125,7 +148,7 @@ print("npc walker spawned")
 ego_bp = blueprint_library.find('vehicle.lincoln.mkz_2020')
 ego_transform = spawn_points[0]
 ego_vehicle = world.try_spawn_actor(ego_bp, ego_transform)
-print("hero appeared")
+print("Ego車両スポーン")
 
 # === カメラセンサの設定 ===
 IM_WIDTH = 800
@@ -135,9 +158,24 @@ camera_bp = blueprint_library.find('sensor.camera.rgb')
 camera_bp.set_attribute('image_size_x', str(IM_WIDTH))
 camera_bp.set_attribute('image_size_y', str(IM_HEIGHT))
 camera_bp.set_attribute('fov', str(FOV))
-camera_transform = carla.Transform(carla.Location(x=2.0, z=2.0))
-camera = world.spawn_actor(camera_bp, camera_transform, attach_to=ego_vehicle)
+# --- ここがEgo車両後方からのカメラの重要な変更点 ---
+# カメラのオフセットを定義
+# Ego車両の後方 (X軸負方向)、上方 (Z軸正方向)、中央 (Y軸0)
+# これらの値は車両のモデルや好みに応じて調整してください
+camera_offset_x = -6.0  # 車両の後方へ-6メートル
+camera_offset_y = 0.0   # 車両の中央（横方向オフセットなし）
+camera_offset_z = 3.0   # 車両の上方へ3メートル
 
+# カメラのTransformを作成し、ego_vehicleにアタッチ
+# camera_offset_x, camera_offset_y, camera_offset_z はローカル座標系のオフセット
+camera_transform = carla.Transform(
+    carla.Location(x=camera_offset_x, y=camera_offset_y, z=camera_offset_z),
+    carla.Rotation(pitch=0.0, yaw=0.0, roll=0.0) # ピッチやヨーも調整可能
+)
+
+# カメラをego_vehicleにアタッチ
+camera = world.spawn_actor(camera_bp, camera_transform, attach_to=ego_vehicle)
+print("Camera attached to ego vehicle (third-person view).")
 image_queue = queue.Queue()
 print("Camera attached")
 
@@ -196,18 +234,33 @@ try:
         K_b = build_projection_matrix(image_w, image_h, fov, is_behind_camera=True)
 
         # carla.CityObjectLabel.Vehicles, carla.CityObjectLabel.Pedestrians などでフィルタリング可能
-        bounding_boxes = world.get_level_bbs(carla.CityObjectLabel.TrafficLight
-)
+        bounding_boxes = world.get_level_bbs(carla.CityObjectLabel.TrafficLight)
         bounding_boxes.extend(world.get_level_bbs(carla.CityObjectLabel.TrafficSigns))
         bounding_boxes.extend(world.get_level_bbs(carla.CityObjectLabel.Vehicles))
         edges = [[0,1], [1,3], [3,2], [2,0], [0,4], [4,5], [5,1], [5,7], [7,6], [6,4], [6,2], [7,3]]
 
+        # #ego_vehicle前方50m以内のbboxにフィルタリング
+        # ego_transform = ego_vehicle.get_transform()
+        # ego_location = ego_transform.location
+        # ego_forward_vec = ego_transform.get_forward_vector()
+        # print(f"ego_location:{ego_location}")
+
+        # bounding_boxes = [
+        #     bbox for bbox in bounding_boxes
+        #     if 1 < bbox.location.distance(ego_location) < VALID_DISTANCE and \
+        #     ego_forward_vec.dot(bbox.location - ego_location) > 0
+        # ]
+        # for bbox in bounding_boxes:
+        #     if hasattr(bbox, 'actor_id'):
+        #         print(f"bbox has actor_id attribute] {bbox.actor_id}")
+        #     print(bbox.location)
+        # break
         # bounding boxの描画
         for bbox in bounding_boxes:
             if bbox.location == ego_vehicle.bounding_box.location:
                 continue
             # Ego車両からの距離でフィルタリング（例: 50m以内）
-            if 0.1 < bbox.location.distance(ego_vehicle.get_transform().location) < VALID_DISTANCE:
+            if 1 < bbox.location.distance(ego_vehicle.get_transform().location) < VALID_DISTANCE:
                 forward_vec = ego_vehicle.get_transform().get_forward_vector()
                 ray = bbox.location - ego_vehicle.get_transform().location
 

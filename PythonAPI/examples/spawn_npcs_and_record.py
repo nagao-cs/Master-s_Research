@@ -18,6 +18,27 @@ try:
 except IndexError:
     pass
 
+# === グローバル変数の設定 ===
+CARLA_HOST = 'localhost'
+CARLA_PORT = 2000
+
+MAP = "Town01_Opt"
+TIME_DURATION = 1000
+VALID_DISTANCE = 50
+FIXED_DELTA_SECONDS = 0.05
+
+CAR_RATIO = 0.5
+
+IM_WIDTH = 800
+IM_HEIGHT = 600
+FOV = 60
+
+OUTPUT_IMG_DIR = "C:\CARLA_Latest\WindowsNoEditor\output\image"
+OUTPUT_LABEL_DIR = "C:\CARLA_Latest\WindowsNoEditor\output\label"
+
+EDGES = [[0,1], [1,3], [3,2], [2,0], [0,4], [4,5], [5,1], [5,7], [7,6], [6,4], [6,2], [7,3]]
+
+# === ヘルパー関数 ===
 def build_projection_matrix(w, h, fov, is_behind_camera=False):
     focal = w / (2.0 * np.tan(fov * np.pi / 360.0))
     K = np.identity(3)
@@ -58,41 +79,16 @@ def point_in_canvas(pos, img_h, img_w):
         return True
     return False
 
-TIME_DURATION = 1000
-VALID_DISTANCE = 50
-FIXED_DELTA_SECONDS = 0.05
-
 # === Carlaサーバに接続 ===
-client = carla.Client('localhost', 2000)
+client = carla.Client(CARLA_HOST, CARLA_PORT)
 client.set_timeout(10.0)
 
 # マップ変更
-# print(client.get_available_maps())
-# map = 'Town01_Opt'
-# client.load_world(map)
-# world = client.get_world()
-# blueprint_library = world.get_blueprint_library()
-# マップ名
-map = 'Town10HD_Opt' # またはあなたの使用しているマップ名
-
-# ワールドをロードする際に、'ParkedVehicles' レイヤーを除外する
-# 他の必要なレイヤーは含める
-desired_map_layers = (
-    carla.MapLayer.Ground |
-    carla.MapLayer.Walls |
-    carla.MapLayer.Buildings |
-    carla.MapLayer.Foliage |
-    # carla.MapLayer.ParkedVehicles | # これをコメントアウトまたは含めない
-    carla.MapLayer.Props |
-    carla.MapLayer.StreetLights
-)
-# ワールドをロード
-# client.load_world() の第二引数に map_layers を渡す
-world = client.load_world(map, reset_settings=True, map_layers=desired_map_layers)
-# reset_settings=True は、前回のシミュレーション設定（同期モードなど）をリセットします。
-# 通常は load_world の後に同期モード設定などを再適用する必要があります。
-
-print(f"Loaded world '{map}' with specific layers. Parked vehicles should be gone.")
+print(client.get_available_maps())
+client.load_world(MAP)
+world = client.get_world()
+blueprint_library = world.get_blueprint_library()
+print(f"Loaded world '{MAP}' with specific layers. Parked vehicles should be gone.")
 
 blueprint_library = world.get_blueprint_library()
 
@@ -106,17 +102,12 @@ world.apply_settings(settings)
 traffic_manager = client.get_trafficmanager()
 traffic_manager.set_synchronous_mode(True)
 tm_port = traffic_manager.get_port()
-print(f"tm_port:{tm_port}")
-
 
 # === NPC車両スポーン ===
 spawn_points = world.get_map().get_spawn_points()
-print(len(spawn_points))
-# random.shuffle(spawn_points)
-
 vehicles = []
-n_npc = (len(spawn_points)*2)//3
-for i in range(n_npc):
+num_npc = int(len(spawn_points) * CAR_RATIO)
+for i in range(num_npc):
     npc_bp = random.choice(blueprint_library.filter('vehicle.*'))
     transform = spawn_points[(i+1) % len(spawn_points)]
     npc = world.try_spawn_actor(npc_bp, transform)
@@ -124,7 +115,7 @@ for i in range(n_npc):
         npc.set_autopilot(True)
         vehicles.append(npc)
 
-print("npc vehicle spawned")
+print(f"{num_npc}npc vehicle spawned")
 # === 歩行者スポーン ===
 pedestrians = []
 walker_controllers = []
@@ -151,59 +142,47 @@ ego_vehicle = world.try_spawn_actor(ego_bp, ego_transform)
 print("Ego車両スポーン")
 
 # === カメラセンサの設定 ===
-IM_WIDTH = 800
-IM_HEIGHT = 600
-FOV = 60
 camera_bp = blueprint_library.find('sensor.camera.rgb')
 camera_bp.set_attribute('image_size_x', str(IM_WIDTH))
 camera_bp.set_attribute('image_size_y', str(IM_HEIGHT))
 camera_bp.set_attribute('fov', str(FOV))
-# --- ここがEgo車両後方からのカメラの重要な変更点 ---
-# カメラのオフセットを定義
-# Ego車両の後方 (X軸負方向)、上方 (Z軸正方向)、中央 (Y軸0)
-# これらの値は車両のモデルや好みに応じて調整してください
-camera_offset_x = -6.0  # 車両の後方へ-6メートル
-camera_offset_y = 0.0   # 車両の中央（横方向オフセットなし）
-camera_offset_z = 3.0   # 車両の上方へ3メートル
-
-# カメラのTransformを作成し、ego_vehicleにアタッチ
-# camera_offset_x, camera_offset_y, camera_offset_z はローカル座標系のオフセット
+# 例1: 車両の少し前、中央、ルーフの高さあたりから前方を向くカメラ
 camera_transform = carla.Transform(
-    carla.Location(x=camera_offset_x, y=camera_offset_y, z=camera_offset_z),
-    carla.Rotation(pitch=0.0, yaw=0.0, roll=0.0) # ピッチやヨーも調整可能
+    carla.Location(x=1.5, y=0.0, z=1.4),  # 前方1.5m, 横方向中央, 上方1.4m
+    carla.Rotation(pitch=0.0, yaw=0.0, roll=0.0) # 回転なし (車両と同じ向き)
 )
 
+# 例2: ダッシュボードカメラ風 (少し前、中央、低め)
+# camera_transform = carla.Transform(
+#     carla.Location(x=0.8, y=0.0, z=1.3),
+#     carla.Rotation(pitch=0.0, yaw=0.0, roll=0.0)
+# )
+
+# 例3: 後方確認用カメラ (車両後方、少し上、後ろを向く)
+# camera_transform = carla.Transform(
+#     carla.Location(x=-2.0, y=0.0, z=1.0),  # 後方2.0m
+#     carla.Rotation(pitch=0.0, yaw=180.0, roll=0.0) # 180度回転して後方を向く
+# )
+
+# 例4: ドライブレコーダー風に少し下を向ける
+# camera_transform = carla.Transform(
+#     carla.Location(x=1.2, y=0.0, z=1.35),
+#     carla.Rotation(pitch=-10.0, yaw=0.0, roll=0.0) # 10度下を向ける
+# )
 # カメラをego_vehicleにアタッチ
 camera = world.spawn_actor(camera_bp, camera_transform, attach_to=ego_vehicle)
-print("Camera attached to ego vehicle (third-person view).")
 image_queue = queue.Queue()
 print("Camera attached")
 
 # 保存用ディレクトリ作成
-os.makedirs("C:\CARLA_Latest\WindowsNoEditor\output\images", exist_ok=True)
-os.makedirs("C:\CARLA_Latest\WindowsNoEditor\output\labels", exist_ok=True)
+os.makedirs(OUTPUT_IMG_DIR, exist_ok=True)
+os.makedirs(OUTPUT_LABEL_DIR, exist_ok=True)
 
 # カメラ行列の計算
 K = build_projection_matrix(IM_WIDTH, IM_HEIGHT, FOV)
 
-def save_image(image):
-    image.save_to_disk(f"output/images/{image.frame:06d}.png")
-    print(f"[Saved] Frame {image.frame}")
-
 # === シミュレーション開始 ===
 ego_vehicle.set_autopilot(True)
-
-# Bounding Box情報を保存するCSVファイルを開く
-# bbox_filename = "output/labels/bounding_boxes.csv"
-# bbox_file = open(bbox_filename, 'w', newline='')
-# bbox_writer = csv.writer(bbox_file)
-# # ヘッダー行を書き込む
-# bbox_writer.writerow([
-#     'frame_id', 'object_id', 'object_label',
-#     '3d_loc_x', '3d_loc_y', '3d_loc_z',
-#     '3d_extent_x', '3d_extent_y', '3d_extent_z',
-#     '2d_bbox_xmin', '2d_bbox_ymin', '2d_bbox_xmax', '2d_bbox_ymax'
-# ])
 
 try:
     print("Running simulation... Press 'q' to stop.")
@@ -219,15 +198,18 @@ try:
         # カメラからの画像をキューから取得
         image = image_queue.get()
 
+        # 生の画像データを保存
+        image_path = os.path.join(OUTPUT_IMG_DIR, f"{image.frame:06d}.png")
+        image.save_to_disk(image_path)
+
         # RGB配列に整形
         img = np.reshape(np.copy(image.raw_data), (image.height, image.width, 4))
 
         # ワールドからカメラへの変換行列を取得
         world_to_camera = np.array(camera.get_transform().get_inverse_matrix())
-        # Get the attributes from the camera
-        image_w = camera_bp.get_attribute("image_size_x").as_int()
-        image_h = camera_bp.get_attribute("image_size_y").as_int()
-        fov = camera_bp.get_attribute("fov").as_float()
+        image_w = IM_HEIGHT
+        image_h = IM_HEIGHT
+        fov = FOV
 
         # Calculate the camera projection matrix to project from 3D -> 2D
         K = build_projection_matrix(image_w, image_h, fov)
@@ -236,8 +218,8 @@ try:
         # carla.CityObjectLabel.Vehicles, carla.CityObjectLabel.Pedestrians などでフィルタリング可能
         bounding_boxes = world.get_level_bbs(carla.CityObjectLabel.TrafficLight)
         bounding_boxes.extend(world.get_level_bbs(carla.CityObjectLabel.TrafficSigns))
-        bounding_boxes.extend(world.get_level_bbs(carla.CityObjectLabel.Vehicles))
-        edges = [[0,1], [1,3], [3,2], [2,0], [0,4], [4,5], [5,1], [5,7], [7,6], [6,4], [6,2], [7,3]]
+        # bounding_boxes.extend(world.get_level_bbs(carla.CityObjectLabel.Vehicles))
+        
 
         # #ego_vehicle前方50m以内のbboxにフィルタリング
         # ego_transform = ego_vehicle.get_transform()
@@ -267,7 +249,7 @@ try:
                 if forward_vec.dot(ray) > 0:
                     # Cycle through the vertices
                     verts = [v for v in bbox.get_world_vertices(carla.Transform())]
-                    for edge in edges:
+                    for edge in EDGES:
                         # Join the vertices into edges
                         p1 = get_image_point(verts[edge[0]], K, world_to_camera)
                         p2 = get_image_point(verts[edge[1]],  K, world_to_camera)
@@ -287,7 +269,7 @@ try:
 
                     if forward_vec.dot(ray) > 0:
                         verts = [v for v in bb.get_world_vertices(npc.get_transform())]
-                        for edge in edges:
+                        for edge in EDGES:
                             p1 = get_image_point(verts[edge[0]], K, world_to_camera)
                             p2 = get_image_point(verts[edge[1]],  K, world_to_camera)
 

@@ -37,6 +37,18 @@ OUTPUT_IMG_DIR = "C:\CARLA_Latest\WindowsNoEditor\output\image"
 OUTPUT_LABEL_DIR = "C:\CARLA_Latest\WindowsNoEditor\output\label"
 
 EDGES = [[0,1], [1,3], [3,2], [2,0], [0,4], [4,5], [5,1], [5,7], [7,6], [6,4], [6,2], [7,3]]
+X_MAX = -10000
+X_MIN = 10000
+Y_MAX = -10000
+Y_MIN = 10000
+
+# === クラスIDマッピングの定義 ===
+CLASS_MAPPING = {
+    carla.CityObjectLabel.TrafficLight: 0,
+    carla.CityObjectLabel.TrafficSigns: 1,
+    carla.CityObjectLabel.Vehicles: 2,
+    carla.CityObjectLabel.Pedestrians: 3,
+}
 
 # === ヘルパー関数 ===
 def build_projection_matrix(w, h, fov, is_behind_camera=False):
@@ -79,6 +91,46 @@ def point_in_canvas(pos, img_h, img_w):
         return True
     return False
 
+def calculate_yolo_bbox(points_2d, img_width, img_height):
+    """
+    2D頂点からYOLO形式のバウンディングボックス (center_x, center_y, width, height) を計算する。
+    Args:
+        points_2d (list): [(x1, y1), (x2, y2), ...] の形式の2D頂点リスト。
+        img_width (int): 画像の幅。
+        img_height (int): 画像の高さ。
+    Returns:
+        tuple: (class_id, center_x, center_y, bbox_width, bbox_height) または None（ボックスが画像外の場合）。
+    """
+    if not points_2d:
+        return None
+
+    # 画像の範囲でクリッピング
+    # numpy配列に変換してmin/maxを計算
+    points_2d = np.array(points_2d)
+    
+    # x, y 座標を画像の範囲内にクリップ
+    xmin = np.clip(np.min(points_2d[:, 0]), 0, img_width - 1)
+    ymin = np.clip(np.min(points_2d[:, 1]), 0, img_height - 1)
+    xmax = np.clip(np.max(points_2d[:, 0]), 0, img_width - 1)
+    ymax = np.clip(np.max(points_2d[:, 1]), 0, img_height - 1)
+
+    # クリッピング後も有効なボックスか確認
+    if xmax <= xmin or ymax <= ymin:
+        return None # 無効なボックスはスキップ
+
+    bbox_width_pixels = xmax - xmin
+    bbox_height_pixels = ymax - ymin
+
+    center_x_pixels = (xmin + xmax) / 2.0
+    center_y_pixels = (ymin + ymax) / 2.0
+
+    # 正規化
+    center_x = center_x_pixels / img_width
+    center_y = center_y_pixels / img_height
+    bbox_width = bbox_width_pixels / img_width
+    bbox_height = bbox_height_pixels / img_height
+
+    return (center_x, center_y, bbox_width, bbox_height)
 # === Carlaサーバに接続 ===
 client = carla.Client(CARLA_HOST, CARLA_PORT)
 client.set_timeout(10.0)
@@ -214,48 +266,101 @@ try:
         K = build_projection_matrix(image_w, image_h, fov)
         K_b = build_projection_matrix(image_w, image_h, fov, is_behind_camera=True)
 
-        # carla.CityObjectLabel.Vehicles, carla.CityObjectLabel.Pedestrians などでフィルタリング可能
-        bounding_boxes = world.get_level_bbs(carla.CityObjectLabel.TrafficLight)
-        bounding_boxes.extend(world.get_level_bbs(carla.CityObjectLabel.TrafficSigns))
-        # bounding_boxes.extend(world.get_level_bbs(carla.CityObjectLabel.Vehicles))
+        # 現在のフレームのラベルデータを格納するリスト
+        frame_labels = []
+
+        # 検出対象のオブジェクトリストを生成
+        # TrafficLight, TrafficSigns, Vehicles, Pedestrians を対象にする
+        objects_to_detect = []
+        objects_to_detect.extend(world.get_actors().filter('traffic.traffic_light'))
+        objects_to_detect.extend(world.get_actors().filter('traffic.traffic_sign'))
+        # objects_to_detect.extend(world.get_actors().filter('vehicle.*'))
+        # objects_to_detect.extend(world.get_actors().filter('walker.*'))
         
-
-        # #ego_vehicle前方50m以内のbboxにフィルタリング
-        # ego_transform = ego_vehicle.get_transform()
-        # ego_location = ego_transform.location
-        # ego_forward_vec = ego_transform.get_forward_vector()
-        # print(f"ego_location:{ego_location}")
-
-        # bounding_boxes = [
-        #     bbox for bbox in bounding_boxes
-        #     if 1 < bbox.location.distance(ego_location) < VALID_DISTANCE and \
-        #     ego_forward_vec.dot(bbox.location - ego_location) > 0
-        # ]
-        # for bbox in bounding_boxes:
-        #     if hasattr(bbox, 'actor_id'):
-        #         print(f"bbox has actor_id attribute] {bbox.actor_id}")
-        #     print(bbox.location)
-        # break
-        # bounding boxの描画
-        for bbox in bounding_boxes:
-            if bbox.location == ego_vehicle.bounding_box.location:
-                continue
-            # Ego車両からの距離でフィルタリング（例: 50m以内）
-            if 1 < bbox.location.distance(ego_vehicle.get_transform().location) < VALID_DISTANCE:
-                forward_vec = ego_vehicle.get_transform().get_forward_vector()
-                ray = bbox.location - ego_vehicle.get_transform().location
-
-                if forward_vec.dot(ray) > 0:
-                    # Cycle through the vertices
-                    verts = [v for v in bbox.get_world_vertices(carla.Transform())]
-                    for edge in EDGES:
-                        # Join the vertices into edges
-                        p1 = get_image_point(verts[edge[0]], K, world_to_camera)
-                        p2 = get_image_point(verts[edge[1]],  K, world_to_camera)
-                        # Draw the edges into the camera output
-                        cv2.line(img, (int(p1[0]),int(p1[1])), (int(p2[0]),int(p2[1])), (0,0,255, 255), 1)
         camera_transform = camera.get_transform()
         camera_location = camera_transform.location
+        camera_forward_vec = camera_transform.get_forward_vector()
+        
+        # bounding boxの描画
+        for obj in objects_to_detect:
+            if obj.id == ego_vehicle.id: # Ego車両は検出対象から除外
+                continue
+
+            # オブジェクトのBoundingBoxを取得
+            bb = obj.bounding_box
+            
+            # オブジェクトのタイプを判断し、クラスIDを取得
+            obj_class_id = None
+            if 'traffic_light' in obj.type_id:
+                obj_class_id = CLASS_MAPPING.get(carla.CityObjectLabel.TrafficLight)
+            elif 'traffic_sign' in obj.type_id:
+                obj_class_id = CLASS_MAPPING.get(carla.CityObjectLabel.TrafficSigns)
+            elif 'vehicle' in obj.type_id:
+                obj_class_id = CLASS_MAPPING.get(carla.CityObjectLabel.Vehicles)
+            elif 'walker' in obj.type_id:
+                obj_class_id = CLASS_MAPPING.get(carla.CityObjectLabel.Pedestrians)
+            
+            if obj_class_id is None: # マッピングされていないオブジェクトはスキップ
+                continue
+
+            dist = obj.get_transform().location.distance(camera_location)
+
+            if dist < VALID_DISTANCE:
+                ray = obj.get_transform().location - camera_location
+                
+                # カメラの視野角内（前方）にあるかを確認
+                if camera_forward_vec.dot(ray) > 0:
+                    verts = [v for v in bb.get_world_vertices(obj.get_transform())]
+                    points_2d_on_image = []
+
+                    # 2D投影された頂点を収集し、画像内に存在するかを確認
+                    all_points_in_canvas = True # 全ての点が画像内にあるかフラグ
+                    for vert in verts:
+                        # 頂点がカメラの後ろにある場合は、別のK_bを使うべき
+                        # このロジックは3D BBOX描画で必要だが、2D BBOX抽出では複雑になりがち
+                        # まずは通常のKで試し、問題があれば調整
+                        ray_vert = vert - camera_location
+                        if camera_forward_vec.dot(ray_vert) > 0: # 頂点がカメラの前にいる場合
+                            p = get_image_point(vert, K, world_to_camera)
+                        else: # 頂点がカメラの後ろにいる場合
+                            # カメラの後ろの頂点を考慮すると、2D BBOX計算が非常に複雑になる
+                            # 簡単な方法としては、そのオブジェクトを検出対象から除外するか、
+                            # 少なくとも描画はスキップする
+                            # 今回は単純化のため、全頂点がカメラの前にないとスキップする、というロジックは採用しない
+                            # ただし、描画時にK_bを使うことで、クリッピングはできる
+                            p = get_image_point(vert, K_b, world_to_camera) # 仮に後ろの頂点も投影
+                        
+                        points_2d_on_image.append(p)
+                        # 一つでも点が完全に画像外の場合、描画は省略する
+                        # if not point_in_canvas(p, IM_WIDTH, IM_HEIGHT):
+                        #     all_points_in_canvas = False
+                        #     break # 描画はしない
+
+                    # if not all_points_in_canvas:
+                    #     continue # 描画はスキップ
+
+                    # 2Dバウンディングボックスの計算とYOLO形式への変換
+                    yolo_bbox = calculate_yolo_bbox(points_2d_on_image, IM_WIDTH, IM_HEIGHT)
+                    
+                    if yolo_bbox:
+                        center_x, center_y, bbox_width, bbox_height = yolo_bbox
+                        frame_labels.append(f"{obj_class_id} {center_x:.6f} {center_y:.6f} {bbox_width:.6f} {bbox_height:.6f}")
+
+                        # デバッグ用に画像にバウンディングボックスを描画 (確認用)
+                        # OpenCVはBGR形式なのでimg_displayを使う
+                        # 描画は非正規化座標で行う
+                        xmin_draw = int((center_x - bbox_width / 2) * IM_WIDTH)
+                        ymin_draw = int((center_y - bbox_height / 2) * IM_HEIGHT)
+                        xmax_draw = int((center_x + bbox_width / 2) * IM_WIDTH)
+                        ymax_draw = int((center_y + bbox_height / 2) * IM_HEIGHT)
+                        cv2.rectangle(img, (xmin_draw, ymin_draw), (xmax_draw, ymax_draw), (0, 255, 0), 2) # 緑色で描画
+                        cv2.putText(img, f"{obj_class_id}", (xmin_draw, ymin_draw - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        # ラベルファイルを保存
+        label_path = os.path.join(OUTPUT_LABEL_DIR, f"{image.frame:06d}.txt")
+        with open(label_path, 'w') as f:
+            for label_line in frame_labels:
+                f.write(label_line + '\n')
+
         for npc in world.get_actors().filter('*vehicle*' or '*pedestrian*'):
             # Filter out the ego vehicle
             if npc.id != ego_vehicle.id:
@@ -264,32 +369,37 @@ try:
                 dist = npc.get_transform().location.distance(camera_location)
 
                 if dist < VALID_DISTANCE:
-                    forward_vec = camera_transform.get_forward_vector()
+                    camera_forward_vec = camera_transform.get_forward_vector()
                     ray = npc.get_transform().location - camera_location
 
-                    if forward_vec.dot(ray) > 0:
+                    if camera_forward_vec.dot(ray) > 0:
+                        p1 = get_image_point(bb.location, K, world_to_camera)
                         verts = [v for v in bb.get_world_vertices(npc.get_transform())]
-                        for edge in EDGES:
-                            p1 = get_image_point(verts[edge[0]], K, world_to_camera)
-                            p2 = get_image_point(verts[edge[1]],  K, world_to_camera)
+                        x_max = -10000
+                        x_min = 10000
+                        y_max = -10000
+                        y_min = 10000
 
-                            p1_in_canvas = point_in_canvas(p1, image_h, image_w)
-                            p2_in_canvas = point_in_canvas(p2, image_h, image_w)
+                        for vert in verts:
+                            p = get_image_point(vert, K, world_to_camera)
+                            # Find the rightmost vertex
+                            if p[0] > x_max:
+                                x_max = p[0]
+                            # Find the leftmost vertex
+                            if p[0] < x_min:
+                                x_min = p[0]
+                            # Find the highest vertex
+                            if p[1] > y_max:
+                                y_max = p[1]
+                            # Find the lowest  vertex
+                            if p[1] < y_min:
+                                y_min = p[1]
 
-                            if not p1_in_canvas and not p2_in_canvas:
-                                continue
+                        cv2.line(img, (int(x_min),int(y_min)), (int(x_max),int(y_min)), (255,0,0, 255), 1)
+                        cv2.line(img, (int(x_min),int(y_max)), (int(x_max),int(y_max)), (255,0,0, 255), 1)
+                        cv2.line(img, (int(x_min),int(y_min)), (int(x_min),int(y_max)), (255,0,0, 255), 1)
+                        cv2.line(img, (int(x_max),int(y_min)), (int(x_max),int(y_max)), (255,0,0, 255), 1)
 
-                            ray0 = verts[edge[0]] - camera.get_transform().location
-                            ray1 = verts[edge[1]] - camera.get_transform().location
-                            cam_forward_vec = camera.get_transform().get_forward_vector()
-
-                            # One of the vertex is behind the camera
-                            if not (cam_forward_vec.dot(ray0) > 0):
-                                p1 = get_image_point(verts[edge[0]], K_b, world_to_camera)
-                            if not (cam_forward_vec.dot(ray1) > 0):
-                                p2 = get_image_point(verts[edge[1]], K_b, world_to_camera)
-
-                            cv2.line(img, (int(p1[0]),int(p1[1])), (int(p2[0]),int(p2[1])), (255,0,0, 255), 1)        
 
         # 画像を表示
         cv2.namedWindow('Carla Camera with Bounding Boxes', cv2.WINDOW_AUTOSIZE)

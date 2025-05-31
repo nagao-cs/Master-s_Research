@@ -149,7 +149,6 @@ camera_bp.set_attribute('fov', str(FOV))
 # 例1: 車両の少し前、中央、ルーフの高さあたりから前方を向くカメラ
 camera_transform = carla.Transform(
     carla.Location(x=1.5, y=0.0, z=1.4),  # 前方1.5m, 横方向中央, 上方1.4m
-    carla.Rotation(pitch=0.0, yaw=0.0, roll=0.0) # 回転なし (車両と同じ向き)
 )
 
 # 例2: ダッシュボードカメラ風 (少し前、中央、低め)
@@ -200,16 +199,16 @@ try:
 
         # 生の画像データを保存
         image_path = os.path.join(OUTPUT_IMG_DIR, f"{image.frame:06d}.png")
-        image.save_to_disk(image_path)
+        # image.save_to_disk(image_path)
 
         # RGB配列に整形
         img = np.reshape(np.copy(image.raw_data), (image.height, image.width, 4))
 
         # ワールドからカメラへの変換行列を取得
         world_to_camera = np.array(camera.get_transform().get_inverse_matrix())
-        image_w = IM_HEIGHT
-        image_h = IM_HEIGHT
-        fov = FOV
+        image_w = camera_bp.get_attribute("image_size_x").as_int()
+        image_h = camera_bp.get_attribute("image_size_y").as_int()
+        fov = camera_bp.get_attribute("fov").as_float()
 
         # Calculate the camera projection matrix to project from 3D -> 2D
         K = build_projection_matrix(image_w, image_h, fov)
@@ -255,17 +254,18 @@ try:
                         p2 = get_image_point(verts[edge[1]],  K, world_to_camera)
                         # Draw the edges into the camera output
                         cv2.line(img, (int(p1[0]),int(p1[1])), (int(p2[0]),int(p2[1])), (0,0,255, 255), 1)
-
+        camera_transform = camera.get_transform()
+        camera_location = camera_transform.location
         for npc in world.get_actors().filter('*vehicle*' or '*pedestrian*'):
             # Filter out the ego vehicle
             if npc.id != ego_vehicle.id:
 
                 bb = npc.bounding_box
-                dist = npc.get_transform().location.distance(ego_vehicle.get_transform().location)
+                dist = npc.get_transform().location.distance(camera_location)
 
                 if dist < VALID_DISTANCE:
-                    forward_vec = ego_vehicle.get_transform().get_forward_vector()
-                    ray = npc.get_transform().location - ego_vehicle.get_transform().location
+                    forward_vec = camera_transform.get_forward_vector()
+                    ray = npc.get_transform().location - camera_location
 
                     if forward_vec.dot(ray) > 0:
                         verts = [v for v in bb.get_world_vertices(npc.get_transform())]

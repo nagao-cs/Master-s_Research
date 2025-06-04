@@ -131,6 +131,7 @@ def calculate_yolo_bbox(points_2d, img_width, img_height):
     bbox_height = bbox_height_pixels / img_height
 
     return (center_x, center_y, bbox_width, bbox_height)
+
 # === Carlaサーバに接続 ===
 client = carla.Client(CARLA_HOST, CARLA_PORT)
 client.set_timeout(10.0)
@@ -140,9 +141,25 @@ print(client.get_available_maps())
 client.load_world(MAP)
 world = client.get_world()
 blueprint_library = world.get_blueprint_library()
-print(f"Loaded world '{MAP}' with specific layers. Parked vehicles should be gone.")
+print(f"Loaded world {MAP}")
 
-blueprint_library = world.get_blueprint_library()
+# 天気の固定
+# 例: 晴れで日中の設定
+# weather = carla.WeatherParameters(
+#     cloudiness=0.0,       # 雲の量 (0.0: 晴れ, 100.0: 完全な曇り)
+#     precipitation=0.0,    # 降水量 (0.0: なし, 100.0: 大雨)
+#     precipitation_deposits=0.0, # 路面の水たまりの量
+#     wind_intensity=0.0,   # 風の強さ
+#     sun_azimuth_angle=45.0, # 太陽の水平方向の角度 (0-360度、90:東、180:南、270:西、0/360:北)
+#     sun_altitude_angle=70.0, # 太陽の高度 (0:地平線, 90:真上)q
+#     fog_density=0.0,      # 霧の密度
+#     wetness=0.0,          # 路面の濡れ具合
+#     scattering_intensity=0.0, # 大気散乱の強さ (Default: 0.0)
+#     rayleigh_scattering_scale=0.033, # Rayleigh散乱のスケール (Default: 0.033)
+#     mie_scattering_scale=0.005, # Mie散乱のスケール (Default: 0.005)
+# )
+# world.set_weather(weather)
+# print("Weather fixed to sunny day.")
 
 # === 同期モード設定 ===
 settings = world.get_settings()
@@ -168,6 +185,7 @@ for i in range(num_npc):
         vehicles.append(npc)
 
 print(f"{num_npc}npc vehicle spawned")
+
 # === 歩行者スポーン ===
 pedestrians = []
 walker_controllers = []
@@ -271,97 +289,72 @@ try:
 
         # 検出対象のオブジェクトリストを生成
         # TrafficLight, TrafficSigns, Vehicles, Pedestrians を対象にする
-        objects_to_detect = []
-        objects_to_detect.extend(world.get_actors().filter('traffic.traffic_light'))
-        objects_to_detect.extend(world.get_actors().filter('traffic.traffic_sign'))
-        # objects_to_detect.extend(world.get_actors().filter('vehicle.*'))
-        # objects_to_detect.extend(world.get_actors().filter('walker.*'))
+        # boundingboxes = []
+        # boundingboxes.extend(world.get_level_bbs(carla.CityObjectLabel.TrafficLight))
+        # boundingboxes.extend(world.get_level_bbs(carla.CityObjectLabel.TrafficSigns))
         
         camera_transform = camera.get_transform()
         camera_location = camera_transform.location
         camera_forward_vec = camera_transform.get_forward_vector()
         
-        # bounding boxの描画
-        for obj in objects_to_detect:
-            if obj.id == ego_vehicle.id: # Ego車両は検出対象から除外
-                continue
+        object_categories = [carla.CityObjectLabel.TrafficLight,
+                             carla.CityObjectLabel.TrafficSigns]
+        category_map = {carla.CityObjectLabel.TrafficLight:9,
+                        carla.CityObjectLabel.TrafficSigns:11,
+                        carla.CityObjectLabel.Vehicles:2}
+        for category in object_categories:
+            boundingboxes = world.get_level_bbs(category)
+            # bounding boxの描画
+            for bbox in boundingboxes:
+                dist = bbox.location.distance(camera_location)
 
-            # オブジェクトのBoundingBoxを取得
-            bb = obj.bounding_box
-            
-            # オブジェクトのタイプを判断し、クラスIDを取得
-            obj_class_id = None
-            if 'traffic_light' in obj.type_id:
-                obj_class_id = CLASS_MAPPING.get(carla.CityObjectLabel.TrafficLight)
-            elif 'traffic_sign' in obj.type_id:
-                obj_class_id = CLASS_MAPPING.get(carla.CityObjectLabel.TrafficSigns)
-            elif 'vehicle' in obj.type_id:
-                obj_class_id = CLASS_MAPPING.get(carla.CityObjectLabel.Vehicles)
-            elif 'walker' in obj.type_id:
-                obj_class_id = CLASS_MAPPING.get(carla.CityObjectLabel.Pedestrians)
-            
-            if obj_class_id is None: # マッピングされていないオブジェクトはスキップ
-                continue
-
-            dist = obj.get_transform().location.distance(camera_location)
-
-            if dist < VALID_DISTANCE:
-                ray = obj.get_transform().location - camera_location
-                
-                # カメラの視野角内（前方）にあるかを確認
-                if camera_forward_vec.dot(ray) > 0:
-                    verts = [v for v in bb.get_world_vertices(obj.get_transform())]
-                    points_2d_on_image = []
-
-                    # 2D投影された頂点を収集し、画像内に存在するかを確認
-                    all_points_in_canvas = True # 全ての点が画像内にあるかフラグ
-                    for vert in verts:
-                        # 頂点がカメラの後ろにある場合は、別のK_bを使うべき
-                        # このロジックは3D BBOX描画で必要だが、2D BBOX抽出では複雑になりがち
-                        # まずは通常のKで試し、問題があれば調整
-                        ray_vert = vert - camera_location
-                        if camera_forward_vec.dot(ray_vert) > 0: # 頂点がカメラの前にいる場合
-                            p = get_image_point(vert, K, world_to_camera)
-                        else: # 頂点がカメラの後ろにいる場合
-                            # カメラの後ろの頂点を考慮すると、2D BBOX計算が非常に複雑になる
-                            # 簡単な方法としては、そのオブジェクトを検出対象から除外するか、
-                            # 少なくとも描画はスキップする
-                            # 今回は単純化のため、全頂点がカメラの前にないとスキップする、というロジックは採用しない
-                            # ただし、描画時にK_bを使うことで、クリッピングはできる
-                            p = get_image_point(vert, K_b, world_to_camera) # 仮に後ろの頂点も投影
-                        
-                        points_2d_on_image.append(p)
-                        # 一つでも点が完全に画像外の場合、描画は省略する
-                        # if not point_in_canvas(p, IM_WIDTH, IM_HEIGHT):
-                        #     all_points_in_canvas = False
-                        #     break # 描画はしない
-
-                    # if not all_points_in_canvas:
-                    #     continue # 描画はスキップ
-
-                    # 2Dバウンディングボックスの計算とYOLO形式への変換
-                    yolo_bbox = calculate_yolo_bbox(points_2d_on_image, IM_WIDTH, IM_HEIGHT)
+                if dist < VALID_DISTANCE:
+                    ray = bbox.location - camera_location
                     
-                    if yolo_bbox:
-                        center_x, center_y, bbox_width, bbox_height = yolo_bbox
-                        frame_labels.append(f"{obj_class_id} {center_x:.6f} {center_y:.6f} {bbox_width:.6f} {bbox_height:.6f}")
+                    # カメラの視野角内（前方）にあるかを確認
+                    if camera_forward_vec.dot(ray) > 0:
+                        verts = [v for v in bbox.get_world_vertices(carla.Transform())]
+                        points_2d_on_image = []
 
-                        # デバッグ用に画像にバウンディングボックスを描画 (確認用)
-                        # OpenCVはBGR形式なのでimg_displayを使う
-                        # 描画は非正規化座標で行う
-                        xmin_draw = int((center_x - bbox_width / 2) * IM_WIDTH)
-                        ymin_draw = int((center_y - bbox_height / 2) * IM_HEIGHT)
-                        xmax_draw = int((center_x + bbox_width / 2) * IM_WIDTH)
-                        ymax_draw = int((center_y + bbox_height / 2) * IM_HEIGHT)
-                        cv2.rectangle(img, (xmin_draw, ymin_draw), (xmax_draw, ymax_draw), (0, 255, 0), 2) # 緑色で描画
-                        cv2.putText(img, f"{obj_class_id}", (xmin_draw, ymin_draw - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        # ラベルファイルを保存
-        label_path = os.path.join(OUTPUT_LABEL_DIR, f"{image.frame:06d}.txt")
-        with open(label_path, 'w') as f:
-            for label_line in frame_labels:
-                f.write(label_line + '\n')
+                        # 2D投影された頂点を収集し、画像内に存在するかを確認
+                        all_points_in_canvas = True # 全ての点が画像内にあるかフラグ
+                        for vert in verts:
+                            ray_vert = vert - camera_location
+                            if camera_forward_vec.dot(ray_vert) > 0: 
+                                p = get_image_point(vert, K, world_to_camera)
+                            else:
+                                # 簡単な方法としては、そのオブジェクトを検出対象から除外するか、
+                                # 少なくとも描画はスキップする
+                                # 今回は単純化のため、全頂点がカメラの前にないとスキップする、というロジックは採用しない
+                                # ただし、描画時にK_bを使うことで、クリッピングはできる
+                                p = get_image_point(vert, K_b, world_to_camera) # 仮に後ろの頂点も投影
+                            
+                            points_2d_on_image.append(p)
+                            # 一つでも点が完全に画像外の場合、描画は省略する
+                            # if not point_in_canvas(p, IM_WIDTH, IM_HEIGHT):
+                            #     all_points_in_canvas = False
+                            #     break # 描画はしない
 
-        for npc in world.get_actors().filter('*vehicle*' or '*pedestrian*'):
+                        # if not all_points_in_canvas:
+                        #     continue # 描画はスキップ
+
+                        # 2Dバウンディングボックスの計算とYOLO形式への変換
+                        yolo_bbox = calculate_yolo_bbox(points_2d_on_image, IM_WIDTH, IM_HEIGHT)
+                        
+                        if yolo_bbox:
+                            center_x, center_y, bbox_width, bbox_height = yolo_bbox
+                            frame_labels.append(f"{category_map[category]} {center_x:.6f} {center_y:.6f} {bbox_width:.6f} {bbox_height:.6f}")
+
+                            # デバッグ用に画像にバウンディングボックスを描画 (確認用)
+                            xmin_draw = int((center_x - bbox_width / 2) * IM_WIDTH)
+                            ymin_draw = int((center_y - bbox_height / 2) * IM_HEIGHT)
+                            xmax_draw = int((center_x + bbox_width / 2) * IM_WIDTH)
+                            ymax_draw = int((center_y + bbox_height / 2) * IM_HEIGHT)
+                            cv2.rectangle(img, (xmin_draw, ymin_draw), (xmax_draw, ymax_draw), (0, 255, 0), 2) # 緑色で描画
+                            cv2.putText(img, f"{category_map[category]}", (xmin_draw, ymin_draw - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        
+
+        for npc in world.get_actors().filter('*vehicle*'):
             # Filter out the ego vehicle
             if npc.id != ego_vehicle.id:
 
@@ -394,12 +387,25 @@ try:
                             # Find the lowest  vertex
                             if p[1] < y_min:
                                 y_min = p[1]
+                        center_x = ((x_max+x_min)/2) / IM_WIDTH
+                        center_y = ((y_max+y_min)/2) / IM_HEIGHT
+                        bbox_width = (x_max-x_min) / IM_WIDTH
+                        bbox_height = (y_max-y_min) / IM_HEIGHT
+                        frame_labels.append(f"{category_map[carla.CityObjectLabel.Vehicles]} {center_x:.6f} {center_y:.6f} {bbox_width:.6f} {bbox_height:.6f}")
 
-                        cv2.line(img, (int(x_min),int(y_min)), (int(x_max),int(y_min)), (255,0,0, 255), 1)
-                        cv2.line(img, (int(x_min),int(y_max)), (int(x_max),int(y_max)), (255,0,0, 255), 1)
-                        cv2.line(img, (int(x_min),int(y_min)), (int(x_min),int(y_max)), (255,0,0, 255), 1)
-                        cv2.line(img, (int(x_max),int(y_min)), (int(x_max),int(y_max)), (255,0,0, 255), 1)
-
+                        # デバッグ用に画像にバウンディングボックスを描画 (確認用)
+                        xmin_draw = int((center_x - bbox_width / 2) * IM_WIDTH)
+                        ymin_draw = int((center_y - bbox_height / 2) * IM_HEIGHT)
+                        xmax_draw = int((center_x + bbox_width / 2) * IM_WIDTH)
+                        ymax_draw = int((center_y + bbox_height / 2) * IM_HEIGHT)
+                        cv2.rectangle(img, (xmin_draw, ymin_draw), (xmax_draw, ymax_draw), (255, 0, 0), 2) # 青色で描画
+                        cv2.putText(img, f"{category_map[category]}", (xmin_draw, ymin_draw - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+                        
+        # ラベルファイルを保存
+        label_path = os.path.join(OUTPUT_LABEL_DIR, f"{image.frame:06d}.txt")
+        with open(label_path, 'w') as f:
+            for label_line in frame_labels:
+                f.write(label_line + '\n')
 
         # 画像を表示
         cv2.namedWindow('Carla Camera with Bounding Boxes', cv2.WINDOW_AUTOSIZE)

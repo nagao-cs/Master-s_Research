@@ -92,9 +92,6 @@ def calculate_yolo_bbox(points_2d, img_width, img_height):
     return (center_x, center_y, bbox_width, bbox_height)
 
 def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle, output_img_dir, output_label_dir, display_window_name):
-    """
-    単一のカメラ画像を処理し、バウンディングボックスを計算して画像とラベルを保存する。
-    """
     # RGB配列に整形
     img_raw = np.reshape(np.copy(image.raw_data), (image.height, image.width, 4))
     img_display = img_raw.copy() # デバッグ表示用 (バウンディングボックスを描画)
@@ -107,7 +104,7 @@ def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle, output_
     camera_forward_vec = camera_transform.get_forward_vector()
     
     # 現在のフレームのラベルデータを格納するリスト
-    frame_labels = []
+    frame_labels = list()
 
     # CityObjectLabels (TrafficLight, TrafficSigns) の処理
     city_object_categories = [carla.CityObjectLabel.TrafficLight, carla.CityObjectLabel.TrafficSigns]
@@ -127,8 +124,8 @@ def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle, output_
                         ray_vert = vert - camera_location
                         if camera_forward_vec.dot(ray_vert) > 0: # 頂点がカメラの前にあれば通常の投影
                             p = get_image_point(vert, K, world_to_camera)
-                        else: # 頂点がカメラの後ろにあれば反転行列で投影（完全なバウンディングボックスのため）
-                            p = get_image_point(vert, K_b, world_to_camera)
+                        # else: # 頂点がカメラの後ろにあれば反転行列で投影（完全なバウンディングボックスのため）
+                        #     p = get_image_point(vert, K_b, world_to_camera)
                         
                         points_2d_on_image.append(p)
                     
@@ -139,22 +136,14 @@ def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle, output_
                         class_id = CLASS_MAPPING[category_label]
                         frame_labels.append(f"{class_id} {center_x:.6f} {center_y:.6f} {bbox_width:.6f} {bbox_height:.6f}")
 
-                        # デバッグ用に画像にバウンディングボックスを描画 (緑色)
-                        xmin_draw = int((center_x - bbox_width / 2) * IM_WIDTH)
-                        ymin_draw = int((center_y - bbox_height / 2) * IM_HEIGHT)
-                        xmax_draw = int((center_x + bbox_width / 2) * IM_WIDTH)
-                        ymax_draw = int((center_y + bbox_height / 2) * IM_HEIGHT)
-                        cv2.rectangle(img_display, (xmin_draw, ymin_draw), (xmax_draw, ymax_draw), (0, 255, 0), 2)
-                        cv2.putText(img_display, f"{class_id}", (xmin_draw, ymin_draw - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-
     # VehicleとPedestrianの処理
     for actor in world.get_actors().filter('*vehicle*'):
         if actor.id == ego_vehicle.id:
             continue # 自車はスキップ
-
+        
         bb = actor.bounding_box
         dist = actor.get_transform().location.distance(camera_location)
-
+        
         if dist < VALID_DISTANCE:
             ray = actor.get_transform().location - camera_location
             
@@ -177,34 +166,27 @@ def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle, output_
                     
                     if 'vehicle' in actor.type_id:
                         class_id = CLASS_MAPPING[carla.CityObjectLabel.Vehicles]
-                        color = (255, 0, 0) # 車両は青色
                     elif 'walker' in actor.type_id:
                         class_id = CLASS_MAPPING[carla.CityObjectLabel.Pedestrians]
-                        color = (0, 0, 255) # 歩行者は赤色
                     else:
-                        continue # 現在のフィルターでは発生しないはず
-
+                        print(f"Unknown actor type: {actor.type_id}")
+                    
                     frame_labels.append(f"{class_id} {center_x:.6f} {center_y:.6f} {bbox_width:.6f} {bbox_height:.6f}")
 
-                    # デバッグ用に画像にバウンディングボックスを描画
-                    xmin_draw = int((center_x - bbox_width / 2) * IM_WIDTH)
-                    ymin_draw = int((center_y - bbox_height / 2) * IM_HEIGHT)
-                    xmax_draw = int((center_x + bbox_width / 2) * IM_WIDTH)
-                    ymax_draw = int((center_y + bbox_height / 2) * IM_HEIGHT)
-                    cv2.rectangle(img_display, (xmin_draw, ymin_draw), (xmax_draw, ymax_draw), color, 2)
-                    cv2.putText(img_display, f"{class_id}", (xmin_draw, ymin_draw - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-
+    # bboxを描画
+    for bbox in frame_labels:
+        class_id, center_x, center_y, bbox_width, bbox_height = map(float, bbox.split())
+        xmin_draw = int((center_x - bbox_width / 2) * IM_WIDTH)
+        ymin_draw = int((center_y - bbox_height / 2) * IM_HEIGHT)
+        xmax_draw = int((center_x + bbox_width / 2) * IM_WIDTH)
+        ymax_draw = int((center_y + bbox_height / 2) * IM_HEIGHT)
+        color = (0, 255, 0) if class_id in [CLASS_MAPPING[carla.CityObjectLabel.TrafficLight], CLASS_MAPPING[carla.CityObjectLabel.TrafficSigns]] else (255, 0, 0) if class_id == CLASS_MAPPING[carla.CityObjectLabel.Vehicles] else (0, 0, 255)
+        cv2.rectangle(img_display, (xmin_draw, ymin_draw), (xmax_draw, ymax_draw), color, 2)
     # 画像とラベルを保存
-    # カメラのロール名（例: 'camera_1'）からIDを抽出
-    camera_id_str = camera_actor.attributes['role_name'].split('_')[-1] 
-    label_path = os.path.join(output_label_dir, f"{image.frame:06d}_{camera_id_str}.txt")
-    
-    with open(label_path, 'w') as f:
-        for label_line in frame_labels:
-            f.write(label_line + '\n')
-
     # 画像を表示
     cv2.imshow(display_window_name, img_display)
+    
+    return frame_labels, img_display
 
 
 # === Carlaサーバに接続 ===
@@ -245,10 +227,10 @@ for _ in range(n_walker):
             pedestrians.append(walker)
             walker_controllers.append(ctrl)
 print("NPC歩行者をスポーンしました。")
-exit()
+
 # === Ego車両スポーン（最後） ===
 ego_bp = blueprint_library.find('vehicle.lincoln.mkz_2020')
-spawn_point = world.get_map().get_spawn_points()[0]
+spawn_point = world.get_map().get_spawn_points()[-1]
 ego_transform = spawn_point
 ego_vehicle = world.try_spawn_actor(ego_bp, ego_transform)
 if ego_vehicle:
@@ -314,10 +296,18 @@ os.makedirs(OUTPUT_LABEL_DIR, exist_ok=True)
 K = build_projection_matrix(IM_WIDTH, IM_HEIGHT, FOV)
 K_b = build_projection_matrix(IM_WIDTH, IM_HEIGHT, FOV, is_behind_camera=True)
 
-# 後でまとめて保存するためのキュー（必要であれば）
-que_save_image_later_1 = queue.Queue()
-que_save_image_later_2 = queue.Queue()
-later_save_que = [que_save_image_later_1, que_save_image_later_2]
+# 生の画像を保存するためのキュー
+row_image_que_1 = queue.Queue()
+row_image_que_2 = queue.Queue()
+row_image_ques = [row_image_que_1, row_image_que_2]
+# bboxを描画した画像を保存するためのキュー
+bbox_image_que_1 = queue.Queue()
+bbox_image_que_2 = queue.Queue()
+bbox_image_ques = [bbox_image_que_1, bbox_image_que_2]
+# ラベル保存用のキュー
+label_que_1 = queue.Queue()
+label_que_2 = queue.Queue()
+label_ques = [label_que_1, label_que_2]
 
 # === シミュレーション開始 ===
 ego_vehicle.set_autopilot(True, tm_port) # TrafficManagerのポートを指定
@@ -336,9 +326,13 @@ try:
             camera_actor = cameras[i]
             display_name = f'Carla Camera {i+1} with Bounding Boxes'
             
-            process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle, OUTPUT_IMG_DIR, OUTPUT_LABEL_DIR, display_name)
-            save_que = later_save_que[i]
-            save_que.put(image)       
+            frame_labels, bbox_image = process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle, OUTPUT_IMG_DIR, OUTPUT_LABEL_DIR, display_name)
+            img_save_que = row_image_ques[i]
+            img_save_que.put(image)
+            bbox_save_que = bbox_image_ques[i]
+            bbox_save_que.put(bbox_image)
+            label_save_que = label_ques[i]
+            label_save_que.put(frame_labels)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             print("ユーザーによりシミュレーションが停止されました。")
             break
@@ -346,17 +340,50 @@ try:
 finally:
     print("シミュレーションが終了しました。")
     #　画像を保存
+    print("生の画像を保存中")
     for i in range(len(cameras)):
-        save_que = later_save_que[i]
+        img_save_que = row_image_ques[i]
         camera = cameras[i]
         image_dir = OUTPUT_IMG_DIR + f"/{camera.attributes['role_name']}"
         os.makedirs(image_dir, exist_ok=True)
-        print(f"Camera {camera.attributes['role_name']} の画像を保存しています...")
-        while not save_que.empty():
-            image = save_que.get()
-            image_path = os.path.join(image_dir, f"{image.frame:06d}.png")
+        print(f"{camera.attributes['role_name']} の画像を保存しています...")
+        num_frame = 0
+        while not img_save_que.empty():
+            image = img_save_que.get()
+            image_path = os.path.join(image_dir, f"{num_frame:06d}.png")
             image.save_to_disk(image_path)
-    print("すべての画像を保存しました。")
+            num_frame += 1
+    print("生のすべての画像を保存しました。")
+    print("バウンディングボックスを描画した画像を保存中")
+    for i in range(len(cameras)):
+        bbox_save_que = bbox_image_ques[i]
+        camera = cameras[i]
+        bbox_dir = OUTPUT_IMG_DIR + f"/{camera.attributes['role_name']}_bbox"
+        os.makedirs(bbox_dir, exist_ok=True)
+        print(f"{camera.attributes['role_name']} のバウンディングボックスを描画した画像を保存しています...")
+        num_frame = 0
+        while not bbox_save_que.empty():
+            bbox_image = bbox_save_que.get()
+            bbox_image_path = os.path.join(bbox_dir, f"{num_frame:06d}.png")
+            cv2.imwrite(bbox_image_path, bbox_image)
+            num_frame += 1
+    # ラベルを保存
+    print("ラベルを保存中") 
+    for i in range(len(cameras)):
+        label_save_que = label_ques[i]
+        camera = cameras[i]
+        label_dir = OUTPUT_LABEL_DIR + f"/{camera.attributes['role_name']}"
+        os.makedirs(label_dir, exist_ok=True)
+        print(f"{camera.attributes['role_name']} のラベルを保存しています...")
+        num_frame = 0
+        while not label_save_que.empty():
+            labels = label_save_que.get()
+            label_path = os.path.join(label_dir, f"{num_frame:06d}.txt")
+            with open(label_path, 'w') as f:
+                for label in labels:
+                    f.write(label + '\n')
+            num_frame += 1
+    print("すべてのラベルを保存しました。")
     print("\nクリーンアップ中...")
 
     # アクターの破棄

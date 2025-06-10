@@ -9,6 +9,7 @@ VALID_DISTANCE = 50 # バウンディングボックス検出の最大距離
 FIXED_DELTA_SECONDS = 0.1 # シミュレーションのステップ時間
 
 CAR_RATIO = 0.5 # NPC車両のスポーン割合
+NUM_WALKERS = 50 # NPC歩行者の数
 
 IM_WIDTH = 800
 IM_HEIGHT = 600

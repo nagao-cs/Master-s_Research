@@ -7,6 +7,9 @@ import time
 import queue
 import numpy as np
 import cv2
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+from utils import carla_util
+from utils.config import *
 
 # === Carla Egg のパス設定 ===
 try:
@@ -17,9 +20,6 @@ try:
 except IndexError:
     pass
 
-# === グローバル変数の設定 ===
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from config import *
 
 # === ヘルパー関数 ===
 def build_projection_matrix(w, h, fov, is_behind_camera=False):
@@ -208,14 +208,10 @@ def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle, output_
 
 
 # === Carlaサーバに接続 ===
-client = carla.Client(CARLA_HOST, CARLA_PORT)
-client.set_timeout(TIMEOUT)
+client = carla_util.connect_to_server(CARLA_HOST, CARLA_PORT, TIMEOUT)
 
 # マップ変更
-client.load_world(MAP)
-world = client.get_world()
-blueprint_library = world.get_blueprint_library()
-print(f"Loaded world {MAP}")
+world, blueprint_library = carla_util.load_map(client, MAP)
 
 # === 同期モード設定 ===
 settings = world.get_settings()
@@ -229,18 +225,7 @@ traffic_manager.set_synchronous_mode(True)
 tm_port = traffic_manager.get_port()
 
 # === NPC車両スポーン ===
-spawn_points = world.get_map().get_spawn_points()
-vehicles = []
-num_npc = int(len(spawn_points) * CAR_RATIO)
-for i in range(num_npc):
-    npc_bp = random.choice(blueprint_library.filter('vehicle.*'))
-    transform = spawn_points[(i+1) % len(spawn_points)]
-    npc = world.try_spawn_actor(npc_bp, transform)
-    if npc:
-        npc.set_autopilot(True, tm_port)
-        vehicles.append(npc)
-
-print(f"{num_npc} NPC車両をスポーンしました。")
+vehicles = carla_util.spawn_npc_vehicles(world, blueprint_library, traffic_manager, CAR_RATIO)
 
 # === 歩行者スポーン ===
 pedestrians = []
@@ -260,10 +245,11 @@ for _ in range(n_walker):
             pedestrians.append(walker)
             walker_controllers.append(ctrl)
 print("NPC歩行者をスポーンしました。")
-
+exit()
 # === Ego車両スポーン（最後） ===
 ego_bp = blueprint_library.find('vehicle.lincoln.mkz_2020')
-ego_transform = spawn_points[0]
+spawn_point = world.get_map().get_spawn_points()[0]
+ego_transform = spawn_point
 ego_vehicle = world.try_spawn_actor(ego_bp, ego_transform)
 if ego_vehicle:
     print("Ego車両をスポーンしました。")

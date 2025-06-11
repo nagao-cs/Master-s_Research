@@ -91,7 +91,7 @@ def calculate_yolo_bbox(points_2d, img_width, img_height):
 
     return (center_x, center_y, bbox_width, bbox_height)
 
-def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle, output_img_dir, output_label_dir, display_window_name):
+def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle,display_window_name):
     # RGB配列に整形
     img_raw = np.reshape(np.copy(image.raw_data), (image.height, image.width, 4))
     img_display = img_raw.copy() # デバッグ表示用 (バウンディングボックスを描画)
@@ -182,66 +182,28 @@ def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle, output_
         ymax_draw = int((center_y + bbox_height / 2) * IM_HEIGHT)
         color = (0, 255, 0) if class_id in [CLASS_MAPPING[carla.CityObjectLabel.TrafficLight], CLASS_MAPPING[carla.CityObjectLabel.TrafficSigns]] else (255, 0, 0) if class_id == CLASS_MAPPING[carla.CityObjectLabel.Vehicles] else (0, 0, 255)
         cv2.rectangle(img_display, (xmin_draw, ymin_draw), (xmax_draw, ymax_draw), color, 2)
-    # 画像とラベルを保存
+        cv2.putText(img_display, f"{int(class_id)}", (xmin_draw, ymin_draw - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
     # 画像を表示
     cv2.imshow(display_window_name, img_display)
     
     return frame_labels, img_display
 
 
-# === Carlaサーバに接続 ===
+# === サーバに接続し、基本的なセッティング ===
 client = carla_util.connect_to_server(CARLA_HOST, CARLA_PORT, TIMEOUT)
-
-# マップ変更
 world, blueprint_library = carla_util.load_map(client, MAP)
-
-# === 同期モード設定 ===
-settings = world.get_settings()
-settings.synchronous_mode = True
-settings.fixed_delta_seconds = FIXED_DELTA_SECONDS
-world.apply_settings(settings)
-
-# === トラフィックマネージャも同期モードに ===
-traffic_manager = client.get_trafficmanager()
-traffic_manager.set_synchronous_mode(True)
-tm_port = traffic_manager.get_port()
+world = carla_util.apply_settings(world, synchronous_mode=True, fixed_delta_seconds=FIXED_DELTA_SECONDS)
+traffic_manager, tm_port = carla_util.setting_traffic_manager(client, synchronous_mode=True)
 
 # === NPC車両スポーン ===
 vehicles = carla_util.spawn_npc_vehicles(world, blueprint_library, traffic_manager, CAR_RATIO)
 
 # === 歩行者スポーン ===
-pedestrians = []
-walker_controllers = []
-n_walker = 10
-for _ in range(n_walker):
-    walker_bp = random.choice(blueprint_library.filter('walker.pedestrian.*'))
-    loc = world.get_random_location_from_navigation()
-    if loc:
-        walker = world.try_spawn_actor(walker_bp, carla.Transform(loc))
-        if walker:
-            ctrl_bp = blueprint_library.find('controller.ai.walker')
-            ctrl = world.spawn_actor(ctrl_bp, carla.Transform(), attach_to=walker)
-            ctrl.start()
-            ctrl.go_to_location(world.get_random_location_from_navigation())
-            ctrl.set_max_speed(1.0 + random.random())  # 1–2 m/s
-            pedestrians.append(walker)
-            walker_controllers.append(ctrl)
-print("NPC歩行者をスポーンしました。")
+pedestrians, walker_controllers = carla_util.spawn_npc_pedestrians(world, blueprint_library, traffic_manager, NUM_WALKERS)
 
 # === Ego車両スポーン（最後） ===
 ego_bp = blueprint_library.find('vehicle.lincoln.mkz_2020')
-spawn_point = world.get_map().get_spawn_points()[-1]
-ego_transform = spawn_point
-ego_vehicle = world.try_spawn_actor(ego_bp, ego_transform)
-if ego_vehicle:
-    print("Ego車両をスポーンしました。")
-else:
-    print("Ego車両のスポーンに失敗しました。")
-    # エラー処理としてクリーンアップして終了
-    client.apply_batch([carla.command.DestroyActor(x) for x in vehicles + pedestrians + walker_controllers])
-    world.apply_settings(world.get_settings()) # Synchronous mode解除
-    sys.exit(1)
-
+ego_vehicle = carla_util.spawn_Ego_vehicles(client, world, ego_bp)
 
 # === カメラセンサの設定 ===
 camera_bp = blueprint_library.find('sensor.camera.rgb')
@@ -310,7 +272,7 @@ label_que_2 = queue.Queue()
 label_ques = [label_que_1, label_que_2]
 
 # === シミュレーション開始 ===
-ego_vehicle.set_autopilot(True, tm_port) # TrafficManagerのポートを指定
+ego_vehicle.set_autopilot(True) # TrafficManagerのポートを指定
 
 try:
     print("シミュレーションを実行中... 'q' キーを押すと停止します。")
@@ -326,7 +288,7 @@ try:
             camera_actor = cameras[i]
             display_name = f'Carla Camera {i+1} with Bounding Boxes'
             
-            frame_labels, bbox_image = process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle, OUTPUT_IMG_DIR, OUTPUT_LABEL_DIR, display_name)
+            frame_labels, bbox_image = process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle, display_name)
             img_save_que = row_image_ques[i]
             img_save_que.put(image)
             bbox_save_que = bbox_image_ques[i]
@@ -384,42 +346,8 @@ finally:
                     f.write(label + '\n')
             num_frame += 1
     print("すべてのラベルを保存しました。")
-    print("\nクリーンアップ中...")
-
-    # アクターの破棄
-    # すべてのカメラのリスナーを停止し、破棄
-    for cam in cameras:
-        if cam:
-            cam.stop()
-            cam.destroy()
-            print(f"Camera {cam.attributes['role_name']} を破棄しました。")
-
-    if ego_vehicle:
-        ego_vehicle.destroy()
-        print("Ego車両を破棄しました。")
-
-    for v in vehicles:
-        if v:
-            v.destroy()
-    print(f"{len(vehicles)} NPC車両を破棄しました。")
-
-    for c in walker_controllers:
-        if c:
-            c.stop()
-            c.destroy()
-    for p in pedestrians:
-        if p:
-            p.destroy()
-    print(f"{len(pedestrians)} NPC歩行者を破棄しました。")
-
-    # シミュレーション設定を元に戻す
-    settings = world.get_settings()
-    settings.synchronous_mode = False
-    settings.fixed_delta_seconds = None
-    world.apply_settings(settings)
-    print("シミュレーション設定を非同期モードに戻しました。")
-
-    traffic_manager.set_synchronous_mode(False)
+    
+    carla_util.cleanup(world, vehicles, pedestrians, walker_controllers, cameras)
     cv2.destroyAllWindows() # OpenCVウィンドウを閉じる
 
-    print("完了しました。")
+    print("シミュレーション終了")

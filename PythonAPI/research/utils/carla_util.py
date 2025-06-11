@@ -76,13 +76,13 @@ def spawn_Ego_vehicles(client, world, bp):
         
     return ego_vehicle
 
-def cleanup(world, vehicles, pedestrians, walker_controllers, cameras):
+def cleanup(client, world, vehicles, pedestrians, walker_controllers, cameras):
     print("クリーンアップを開始")
     for camera in cameras:
         if camera:
             camera.stop()
             camera.destroy()
-            print(f"{camera.attribute['role_name']} を破棄")
+            print(f"{camera.attributes['role_name']} を破棄")
     for vehicle in vehicles:
         if vehicle:
             vehicle.destroy()
@@ -100,7 +100,7 @@ def cleanup(world, vehicles, pedestrians, walker_controllers, cameras):
     settings.synchronous_mode = False
     settings.fixed_delta_seconds = None
     world.apply_settings(settings)
-    traffic_manager = world.get_traffic_manager()
+    traffic_manager = client.get_trafficmanager()
     traffic_manager.set_synchronous_mode(False)
     print("シミュレーションを非同期モードに設定")
     print("クリーンアップが完了")

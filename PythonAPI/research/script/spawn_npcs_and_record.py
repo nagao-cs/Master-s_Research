@@ -8,7 +8,7 @@ import queue
 import numpy as np
 import cv2
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from utils import carla_util
+from utils import carla_util, camera_util
 from utils.config import *
 
 # === Carla Egg のパス設定 ===
@@ -206,48 +206,7 @@ ego_bp = blueprint_library.find('vehicle.lincoln.mkz_2020')
 ego_vehicle = carla_util.spawn_Ego_vehicles(client, world, ego_bp)
 
 # === カメラセンサの設定 ===
-camera_bp = blueprint_library.find('sensor.camera.rgb')
-camera_bp.set_attribute('image_size_x', str(IM_WIDTH))
-camera_bp.set_attribute('image_size_y', str(IM_HEIGHT))
-camera_bp.set_attribute('fov', str(FOV))
-
-# カメラのリストとそれぞれのキュー
-cameras = []
-image_queues = []
-
-# カメラ1: 車両の少し前、中央、ルーフの高さあたりから前方を向くカメラ
-# ロール名をブループリントに設定
-camera_bp_1 = blueprint_library.find('sensor.camera.rgb')
-camera_bp_1.set_attribute('image_size_x', str(IM_WIDTH))
-camera_bp_1.set_attribute('image_size_y', str(IM_HEIGHT))
-camera_bp_1.set_attribute('fov', str(FOV))
-camera_bp_1.set_attribute('role_name', 'camera_1') # ここでブループリントにロール名を設定
-
-camera_transform_1 = carla.Transform(carla.Location(x=1.5, y=0.0, z=1.4))
-camera_1 = world.spawn_actor(camera_bp_1, camera_transform_1, attach_to=ego_vehicle, attachment_type=carla.AttachmentType.Rigid)
-if camera_1:
-    cameras.append(camera_1)
-    q1 = queue.Queue()
-    image_queues.append(q1)
-    camera_1.listen(q1.put)
-    print("Camera 1 をアタッチしました。")
-
-# カメラ2: 車両の少し前、右寄りの位置から前方を向くカメラ
-# ロール名をブループリントに設定
-camera_bp_2 = blueprint_library.find('sensor.camera.rgb')
-camera_bp_2.set_attribute('image_size_x', str(IM_WIDTH))
-camera_bp_2.set_attribute('image_size_y', str(IM_HEIGHT))
-camera_bp_2.set_attribute('fov', str(FOV))
-camera_bp_2.set_attribute('role_name', 'camera_2') # ここでブループリントにロール名を設定
-
-camera_transform_2 = carla.Transform(carla.Location(x=1.5, y=0.5, z=1.4))
-camera_2 = world.spawn_actor(camera_bp_2, camera_transform_2, attach_to=ego_vehicle, attachment_type=carla.AttachmentType.Rigid)
-if camera_2:
-    cameras.append(camera_2)
-    q2 = queue.Queue()
-    image_queues.append(q2)
-    camera_2.listen(q2.put)
-    print("Camera 2 をアタッチしました。")
+cameras, image_queues = camera_util.setting_camera(world, blueprint_library, ego_vehicle, IM_WIDTH, IM_HEIGHT, FOV, NUM_CAMERA)
 
 
 # 保存用ディレクトリ作成
@@ -258,18 +217,7 @@ os.makedirs(OUTPUT_LABEL_DIR, exist_ok=True)
 K = build_projection_matrix(IM_WIDTH, IM_HEIGHT, FOV)
 K_b = build_projection_matrix(IM_WIDTH, IM_HEIGHT, FOV, is_behind_camera=True)
 
-# 生の画像を保存するためのキュー
-row_image_que_1 = queue.Queue()
-row_image_que_2 = queue.Queue()
-row_image_ques = [row_image_que_1, row_image_que_2]
-# bboxを描画した画像を保存するためのキュー
-bbox_image_que_1 = queue.Queue()
-bbox_image_que_2 = queue.Queue()
-bbox_image_ques = [bbox_image_que_1, bbox_image_que_2]
-# ラベル保存用のキュー
-label_que_1 = queue.Queue()
-label_que_2 = queue.Queue()
-label_ques = [label_que_1, label_que_2]
+row_image_ques, bbox_image_ques, label_ques = camera_util.create_save_queues(NUM_CAMERA)
 
 # === シミュレーション開始 ===
 ego_vehicle.set_autopilot(True) # TrafficManagerのポートを指定
@@ -347,7 +295,7 @@ finally:
             num_frame += 1
     print("すべてのラベルを保存しました。")
     
-    carla_util.cleanup(world, vehicles, pedestrians, walker_controllers, cameras)
+    carla_util.cleanup(client, world, vehicles, pedestrians, walker_controllers, cameras)
     cv2.destroyAllWindows() # OpenCVウィンドウを閉じる
 
     print("シミュレーション終了")

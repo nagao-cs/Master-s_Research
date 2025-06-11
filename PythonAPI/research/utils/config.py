@@ -14,6 +14,7 @@ NUM_WALKERS = 50 # NPC歩行者の数
 IM_WIDTH = 800
 IM_HEIGHT = 600
 FOV = 60
+NUM_CAMERA = 3 # カメラの数
 
 OUTPUT_IMG_DIR = "C:\\CARLA_Latest\\WindowsNoEditor\\output\\image"
 OUTPUT_LABEL_DIR = "C:\\CARLA_Latest\\WindowsNoEditor\\output\\label"

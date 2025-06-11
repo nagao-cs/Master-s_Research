@@ -3,10 +3,10 @@ CARLA_HOST = 'localhost'
 CARLA_PORT = 2000
 TIMEOUT = 10
 
-MAP = "Town01_Opt"
+MAP = "Town10HD_Opt"
 TIME_DURATION = 1000 # シミュレーション時間（秒）
 VALID_DISTANCE = 50 # バウンディングボックス検出の最大距離
-FIXED_DELTA_SECONDS = 0.1 # シミュレーションのステップ時間
+FIXED_DELTA_SECONDS = 0.05 # シミュレーションのステップ時間
 
 CAR_RATIO = 0.5 # NPC車両のスポーン割合
 NUM_WALKERS = 50 # NPC歩行者の数
@@ -14,7 +14,7 @@ NUM_WALKERS = 50 # NPC歩行者の数
 IM_WIDTH = 800
 IM_HEIGHT = 600
 FOV = 60
-NUM_CAMERA = 3 # カメラの数
+NUM_CAMERA = 1 # カメラの数
 
 OUTPUT_IMG_DIR = "C:\\CARLA_Latest\\WindowsNoEditor\\output\\image"
 OUTPUT_LABEL_DIR = "C:\\CARLA_Latest\\WindowsNoEditor\\output\\label"

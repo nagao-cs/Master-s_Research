@@ -7,6 +7,7 @@ def connect_to_server(host, port, timeout):
 
 def load_map(client, map_name):
     world = client.load_world(map_name)
+    print(client.get_available_maps())
     bp = world.get_blueprint_library()
     print(f"{map_name} loaded")
     return world, bp
@@ -26,9 +27,8 @@ def setting_traffic_manager(client, synchronous_mode):
     print(f"Traffic manager settings applied: Synchronous mode: {synchronous_mode}, Port: {tm_port}")
     return traffic_manager, tm_port
 
-def spawn_npc_vehicles(world, bp, traffic_manager, car_ratio):
+def spawn_npc_vehicles(world, bp, traffic_manager, spawn_points, car_ratio):
     tm_port = traffic_manager.get_port()
-    spawn_points = world.get_map().get_spawn_points()
     num_spawn_points = len(spawn_points)
     vehicles = list()
     num_vehicles = int(num_spawn_points * car_ratio)
@@ -42,7 +42,7 @@ def spawn_npc_vehicles(world, bp, traffic_manager, car_ratio):
     print(f"{len(vehicles)} 台のNPC車両をスポーン")
     return vehicles
 
-def spawn_npc_pedestrians(world, bp, traffic_manager, num_walkers):
+def spawn_npc_pedestrians(world, bp, num_walkers):
     pedestrians = list()
     walker_controllers = list()
     for i in range(num_walkers):
@@ -62,17 +62,15 @@ def spawn_npc_pedestrians(world, bp, traffic_manager, num_walkers):
     print(f"{len(pedestrians)} 人のNPC歩行者をスポーン")    
     return pedestrians, walker_controllers
 
-def spawn_Ego_vehicles(client, world, bp):
-    spawn_point = world.get_map().get_spawn_points()[-1]
+def spawn_Ego_vehicles(client, world, bp, spawn_points):
+    spawn_point = spawn_points[-1]
     ego_vehicle = world.try_spawn_actor(bp, spawn_point)
     if ego_vehicle:
         ego_vehicle.set_autopilot(True)
         print("Ego vehicle spawned")
     else:
         print("Failed to spawn Ego vehicle")
-        # client.apply_batch([carla.command.DestroyActor(x) for x in vehicles + pedestrians + walker_controllers])
-        # world.apply_settings(world.get_settings()) # Synchronous mode解除
-        # sys.exit(1)
+        
         
     return ego_vehicle
 

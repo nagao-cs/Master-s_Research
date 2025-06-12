@@ -3,7 +3,8 @@ from queue import Queue
 import math
 import numpy as np
 import cv2
-from utils.config import IM_WIDTH, IM_HEIGHT, FOV, VALID_DISTANCE, CLASS_MAPPING
+import os
+from utils.config import IM_WIDTH, IM_HEIGHT, FOV, VALID_DISTANCE, CLASS_MAPPING, XMIN, XMAX, YMIN, YMAX, DIST
 
 def setting_camera(world, bp_library, ego_vehicle, im_width, im_height, fov, num_camera):
     cameras = list()
@@ -104,8 +105,7 @@ def calculate_yolo_bbox(points_2d, img_width, img_height):
 
 def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle,display_window_name):
     # RGB配列に整形
-    img_raw = np.reshape(np.copy(image.raw_data), (image.height, image.width, 4))
-    img_display = img_raw.copy() # デバッグ表示用 (バウンディングボックスを描画)
+    img_display = image.copy() # デバッグ表示用 (バウンディングボックスを描画)
 
     # ワールドからカメラへの変換行列を取得
     world_to_camera = np.array(camera_actor.get_transform().get_inverse_matrix())
@@ -138,14 +138,14 @@ def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle,display_
                         # else: # 頂点がカメラの後ろにあれば反転行列で投影（完全なバウンディングボックスのため）
                         #     p = get_image_point(vert, K_b, world_to_camera)
                         
-                        points_2d_on_image.append(p)
+                            points_2d_on_image.append(p)
                     
                     yolo_bbox = calculate_yolo_bbox(points_2d_on_image, IM_WIDTH, IM_HEIGHT)
                     
                     if yolo_bbox:
                         xmin, xmax, ymin, ymax = yolo_bbox
                         class_id = CLASS_MAPPING[category_label]
-                        frame_labels.append([class_id, xmin, xmax, ymin, ymax])
+                        frame_labels.append([class_id, xmin, xmax, ymin, ymax, dist])
 
     # VehicleとPedestrianの処理
     for actor in world.get_actors().filter('*vehicle*'):
@@ -177,23 +177,21 @@ def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle,display_
                     
                     if 'vehicle' in actor.type_id:
                         class_id = CLASS_MAPPING[carla.CityObjectLabel.Vehicles]
-                    elif 'walker' in actor.type_id:
-                        class_id = CLASS_MAPPING[carla.CityObjectLabel.Pedestrians]
+                    elif 'motorcycle' in actor.type_id:
+                        class_id = CLASS_MAPPING['motorcycle']
+                    elif 'bicycle' in actor.type_id:
+                        class_id = CLASS_MAPPING['bicycle']
                     else:
                         print(f"Unknown actor type: {actor.type_id}")
                     
-                    frame_labels.append([class_id, xmin, xmax, ymin, ymax])
-    # bboxをxminとyminでソート
+                    frame_labels.append([class_id, xmin, xmax, ymin, ymax, dist])
+    # bboxをdist,xminとyminでソート
     frame_labels.sort(key=lambda x: (x[1], x[3]))
     # ほかのbboxに隠れるbboxを除外
     frame_labels = remove_overlapping_bboxes(frame_labels)
     # bboxを描画
     for bbox in frame_labels:
-        class_id, xmin, xmax, ymin, ymax = bbox
-        # xmin_draw = int((center_x - bbox_width / 2) * IM_WIDTH)
-        # ymin_draw = int((center_y - bbox_height / 2) * IM_HEIGHT)
-        # xmax_draw = int((center_x + bbox_width / 2) * IM_WIDTH)
-        # ymax_draw = int((center_y + bbox_height / 2) * IM_HEIGHT)
+        class_id, xmin, xmax, ymin, ymax, dist = bbox
         xmin_draw = int(xmin)
         xmax_draw = int(xmax)
         ymin_draw = int(ymin)
@@ -206,25 +204,38 @@ def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle,display_
     
     return frame_labels, img_display
 
+def is_contained(inner, outer):
+    # inner, outer: [class_id, xmin, xmax, ymin, ymax, dist]
+    return (outer[1] <= inner[1] and outer[2] >= inner[2] and
+            outer[3] <= inner[3] and outer[4] >= inner[4])
+
 def remove_overlapping_bboxes(bboxes):
     if not bboxes:
         return []
-    # bboxes[1]=xmin, bboxes[2]=xmax, bboxes[3]=ymin, bboxes[4]=ymax
-    filtered_bboxes = [bboxes[0]]  # 最初のbboxはxminが最小なのでほかのbboxにたぶん隠れないと仮定
-    prev = bboxes[0]
-    for bbox in bboxes[1:]:
-        # まずx座標についてチェック
-        if bbox[2] <= prev[2]:
-            # 現在のbboxがprev_xmin < bbox_xmin < bbox_xmax < prev_xmaxである
-            # 次にy座標についてチェック
-            if prev[3] < bbox[3] < prev[4] or prev[3] < bbox[4] < prev[4]:
-                # 現在のbboxがprev_ymin < bbox_ymin < bbox_ymax < prev_ymaxである
+    filtered = []
+    for i, bbox in enumerate(bboxes):
+        contained = False
+        for j, other in enumerate(bboxes):
+            if i == j:
                 continue
-            else:
-                # 現在のbboxはprev_bboxに隠れていないので追加
-                filtered_bboxes.append(bbox)
-        else:
-            # 現在のbboxはprev_xmax < bbox_xminである
-            filtered_bboxes.append(bbox)
-    
-    return filtered_bboxes
+            # より手前（distが小さい）で完全に覆われている場合
+            if other[DIST] < bbox[DIST] and is_contained(bbox, other):
+                contained = True
+                break
+        if not contained:
+            filtered.append(bbox)
+    return filtered
+
+def save_images(image_queues, cameras, output_dir, suffix=''):
+    for i, cam_q in enumerate(image_queues):
+        camera = cameras[i]
+        image_dir = f"{output_dir}/{camera.attributes['role_name']}{suffix}"
+        os.makedirs(image_dir, exist_ok=True)
+        print(f"{camera.attributes['role_name']} の画像を保存しています...")
+        num_frame = 0
+        while not cam_q.empty():
+            image = cam_q.get()
+            image_path = os.path.join(image_dir, f"{num_frame:06d}.png")
+            image.save_to_disk(image_path)
+            num_frame += 1
+    print("すべての画像を保存しました。")

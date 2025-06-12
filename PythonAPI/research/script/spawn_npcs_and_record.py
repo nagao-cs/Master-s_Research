@@ -2,6 +2,7 @@ import glob
 import os
 import sys
 import cv2
+import numpy as np
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from utils import carla_util, camera_util
 from utils.config import *
@@ -36,10 +37,13 @@ def main():
     # === カメラセンサの設定 ===
     cameras, image_queues = camera_util.setting_camera(world, blueprint_library, ego_vehicle, IM_WIDTH, IM_HEIGHT, FOV, NUM_CAMERA)
 
-
     # 保存用ディレクトリ作成
     os.makedirs(OUTPUT_IMG_DIR, exist_ok=True)
+    image_dir = OUTPUT_IMG_DIR + f"/{MAP}"
+    os.makedirs(image_dir, exist_ok=True)
     os.makedirs(OUTPUT_LABEL_DIR, exist_ok=True)
+    label_dir = OUTPUT_LABEL_DIR + f"/{MAP}"
+    os.makedirs(label_dir, exist_ok=True)
 
     # カメラ行列の計算
     K = camera_util.build_projection_matrix(IM_WIDTH, IM_HEIGHT, FOV)
@@ -61,6 +65,8 @@ def main():
             # 各カメラの画像をキューから取得し、処理
             for i, cam_q in enumerate(image_queues):
                 image = cam_q.get()
+                # RGB配列に整形
+                image = np.reshape(np.copy(image.raw_data), (image.height, image.width, 4))
                 camera_actor = cameras[i]
                 display_name = f'Carla Camera {i+1} with Bounding Boxes'
                 
@@ -82,14 +88,14 @@ def main():
         for i in range(len(cameras)):
             img_save_que = row_image_ques[i]
             camera = cameras[i]
-            image_dir = OUTPUT_IMG_DIR + f"/{camera.attributes['role_name']}"
+            image_dir = OUTPUT_IMG_DIR + f"/{MAP}" + f"/{camera.attributes['role_name']}"
             os.makedirs(image_dir, exist_ok=True)
             print(f"{camera.attributes['role_name']} の画像を保存しています...")
             num_frame = 0
             while not img_save_que.empty():
                 image = img_save_que.get()
                 image_path = os.path.join(image_dir, f"{num_frame:06d}.png")
-                image.save_to_disk(image_path)
+                cv2.imwrite(image_path, image)
                 num_frame += 1
         print("生のすべての画像を保存しました。")
         print("バウンディングボックスを描画した画像を保存中")
@@ -119,7 +125,7 @@ def main():
                 label_path = os.path.join(label_dir, f"{num_frame:06d}.txt")
                 with open(label_path, 'w') as f:
                     for label in labels:
-                        f.write(label + '\n')
+                        f.write(' '.join(map(str, label)) + '\n')
                 num_frame += 1
         print("すべてのラベルを保存しました。")
         

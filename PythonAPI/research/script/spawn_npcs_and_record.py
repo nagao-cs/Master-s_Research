@@ -102,7 +102,7 @@ def main():
         for i in range(len(cameras)):
             bbox_save_que = bbox_image_ques[i]
             camera = cameras[i]
-            bbox_dir = OUTPUT_IMG_DIR + f"/{camera.attributes['role_name']}_bbox"
+            bbox_dir = OUTPUT_IMG_DIR + f"/{MAP}" + f"/{camera.attributes['role_name']}_bbox"
             os.makedirs(bbox_dir, exist_ok=True)
             print(f"{camera.attributes['role_name']} のバウンディングボックスを描画した画像を保存しています...")
             num_frame = 0
@@ -116,7 +116,7 @@ def main():
         for i in range(len(cameras)):
             label_save_que = label_ques[i]
             camera = cameras[i]
-            label_dir = OUTPUT_LABEL_DIR + f"/{camera.attributes['role_name']}"
+            label_dir = OUTPUT_LABEL_DIR + f"/{MAP}" + f"/{camera.attributes['role_name']}"
             os.makedirs(label_dir, exist_ok=True)
             print(f"{camera.attributes['role_name']} のラベルを保存しています...")
             num_frame = 0

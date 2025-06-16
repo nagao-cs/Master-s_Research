@@ -14,6 +14,7 @@ def setting_camera(world, bp_library, ego_vehicle, im_width, im_height, fov, num
         camera_bp.set_attribute('image_size_x', str(im_width))
         camera_bp.set_attribute('image_size_y', str(im_height))
         camera_bp.set_attribute('fov', str(fov))
+        # camera_bp.set_attribute('sensor_tick', '0.5s')
         if i == 0:
             camera_bp.set_attribute('role_name', 'front')
             camera_transform = carla.Transform(carla.Location(x=1.5, y=0.0, z=2.0))
@@ -89,21 +90,9 @@ def calculate_yolo_bbox(points_2d, img_width, img_height):
     if xmax <= xmin or ymax <= ymin:
         return None
 
-    # bbox_width_pixels = xmax - xmin
-    # bbox_height_pixels = ymax - ymin
-
-    # center_x_pixels = (xmin + xmax) / 2.0
-    # center_y_pixels = (ymin + ymax) / 2.0
-
-    # # 正規化
-    # center_x = center_x_pixels / img_width
-    # center_y = center_y_pixels / img_height
-    # bbox_width = bbox_width_pixels / img_width
-    # bbox_height = bbox_height_pixels / img_height
-
     return (xmin, xmax, ymin, ymax)
 
-def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle,display_window_name):
+def process_camera_data(image, camera_actor, world, K, K_b, display_window_name):
     # RGB配列に整形
     img_display = image.copy() # デバッグ表示用 (バウンディングボックスを描画)
 
@@ -118,7 +107,7 @@ def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle,display_
     frame_labels = list()
 
     # CityObjectLabels (TrafficLight, TrafficSigns) の処理
-    city_object_categories = [carla.CityObjectLabel.TrafficLight, carla.CityObjectLabel.TrafficSigns, carla.CityObjectLabel.Pedestrians]
+    city_object_categories = [carla.CityObjectLabel.TrafficLight, carla.CityObjectLabel.TrafficSigns, carla.CityObjectLabel.Vehicles, carla.CityObjectLabel.Pedestrians, carla.CityObjectLabel.Buildings, carla.CityObjectLabel.Vegetation, carla.CityObjectLabel.Walls]
     for category_label in city_object_categories:
         boundingboxes = world.get_level_bbs(category_label)
         for bbox in boundingboxes:
@@ -133,11 +122,8 @@ def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle,display_
 
                     for vert in verts:
                         ray_vert = vert - camera_location
-                        if camera_forward_vec.dot(ray_vert) > 0: # 頂点がカメラの前にあれば通常の投影
+                        if camera_forward_vec.dot(ray_vert) > 0: 
                             p = get_image_point(vert, K, world_to_camera)
-                        # else: # 頂点がカメラの後ろにあれば反転行列で投影（完全なバウンディングボックスのため）
-                        #     p = get_image_point(vert, K_b, world_to_camera)
-                        
                             points_2d_on_image.append(p)
                     
                     yolo_bbox = calculate_yolo_bbox(points_2d_on_image, IM_WIDTH, IM_HEIGHT)
@@ -146,45 +132,8 @@ def process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle,display_
                         xmin, xmax, ymin, ymax = yolo_bbox
                         class_id = CLASS_MAPPING[category_label]
                         frame_labels.append([class_id, xmin, xmax, ymin, ymax, dist])
-
-    # VehicleとPedestrianの処理
-    for actor in world.get_actors().filter('*vehicle*'):
-        if actor.id == ego_vehicle.id:
-            continue # 自車はスキップ
-        
-        bb = actor.bounding_box
-        dist = actor.get_transform().location.distance(camera_location)
-        
-        if dist < VALID_DISTANCE:
-            ray = actor.get_transform().location - camera_location
-            
-            if camera_forward_vec.dot(ray) > 0: # カメラの視野角内（前方）にあるかを確認
-                verts = [v for v in bb.get_world_vertices(actor.get_transform())]
-                points_2d_on_image = []
-
-                for vert in verts:
-                    ray_vert = vert - camera_location
-                    if camera_forward_vec.dot(ray_vert) > 0:
-                        p = get_image_point(vert, K, world_to_camera)
-                    else:
-                        p = get_image_point(vert, K_b, world_to_camera)
-                    points_2d_on_image.append(p)
                 
-                yolo_bbox = calculate_yolo_bbox(points_2d_on_image, IM_WIDTH, IM_HEIGHT)
-
-                if yolo_bbox:
-                    xmin, xmax, ymin, ymax = yolo_bbox
-                    
-                    if 'vehicle' in actor.type_id:
-                        class_id = CLASS_MAPPING[carla.CityObjectLabel.Vehicles]
-                    elif 'motorcycle' in actor.type_id:
-                        class_id = CLASS_MAPPING['motorcycle']
-                    elif 'bicycle' in actor.type_id:
-                        class_id = CLASS_MAPPING['bicycle']
-                    else:
-                        print(f"Unknown actor type: {actor.type_id}")
-                    
-                    frame_labels.append([class_id, xmin, xmax, ymin, ymax, dist])
+        
     # bboxをdist,xminとyminでソート
     frame_labels.sort(key=lambda x: (x[1], x[3]))
     # ほかのbboxに隠れるbboxを除外
@@ -222,7 +171,7 @@ def remove_overlapping_bboxes(bboxes):
             if other[DIST] < bbox[DIST] and is_contained(bbox, other):
                 contained = True
                 break
-        if not contained:
+        if not contained and bbox[0] != -1:  # -1は無視するクラス
             filtered.append(bbox)
     return filtered
 

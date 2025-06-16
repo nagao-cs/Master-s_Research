@@ -2,10 +2,12 @@ import glob
 import os
 import sys
 import cv2
+import csv
 import numpy as np
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from utils import carla_util, camera_util
 from utils.config import *
+
 
 # === Carla Egg のパス設定 ===
 try:
@@ -52,8 +54,7 @@ def main():
     row_image_ques, bbox_image_ques, label_ques = camera_util.create_save_queues(NUM_CAMERA)
 
     # === シミュレーション開始 ===
-    ego_vehicle.set_autopilot(True) # TrafficManagerのポートを指定
-
+    ego_vehicle.set_autopilot(True)
     try:
         print("シミュレーションを実行中... 'q' キーを押すと停止します。")
         duration_sec = TIME_DURATION
@@ -70,7 +71,7 @@ def main():
                 camera_actor = cameras[i]
                 display_name = f'Carla Camera {i+1} with Bounding Boxes'
                 
-                frame_labels, bbox_image = camera_util.process_camera_data(image, camera_actor, world, K, K_b, ego_vehicle, display_name)
+                frame_labels, bbox_image = camera_util.process_camera_data(image, camera_actor, world, K, K_b, display_name)
                 img_save_que = row_image_ques[i]
                 img_save_que.put(image)
                 bbox_save_que = bbox_image_ques[i]
@@ -122,10 +123,12 @@ def main():
             num_frame = 0
             while not label_save_que.empty():
                 labels = label_save_que.get()
-                label_path = os.path.join(label_dir, f"{num_frame:06d}.txt")
+                label_path = os.path.join(label_dir, f"{num_frame:06d}.csv")
                 with open(label_path, 'w') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['class_id', 'xmin', 'xmax', 'ymin', 'ymax', 'distance'])
                     for label in labels:
-                        f.write(' '.join(map(str, label)) + '\n')
+                        writer.writerow(label)
                 num_frame += 1
         print("すべてのラベルを保存しました。")
         

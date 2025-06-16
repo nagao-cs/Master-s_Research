@@ -3,6 +3,7 @@ from ultralytics import YOLO
 from PIL import Image
 import cv2
 import csv
+from concurrent.futures import ThreadPoolExecutor
 
 COCO_LABELS = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus",
@@ -33,8 +34,8 @@ def predict_image(model, image, conf_threshold=0.25):
             label = COCO_LABELS[class_id] if class_id < len(COCO_LABELS) else 'unknown'
             output.append({
                 'xmin': xmin,
-                'ymin': ymin,
                 'xmax': xmax,
+                'ymin': ymin,
                 'ymax': ymax,
                 'class_id': class_id,
                 'confidence': conf,
@@ -45,8 +46,8 @@ def predict_image(model, image, conf_threshold=0.25):
 def draw_bbox(image, bboxes):
     for bbox in bboxes:
         xmin = int(bbox['xmin'])
-        ymin = int(bbox['ymin'])
         xmax = int(bbox['xmax'])
+        ymin = int(bbox['ymin'])
         ymax = int(bbox['ymax'])
         label = bbox['label']
         conf = bbox['confidence']
@@ -59,11 +60,12 @@ def draw_bbox(image, bboxes):
         cv2.putText(image, text, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
     return image
 
-def detect_and_save_results(image_dir, output_dir, model_path='yolov8n.pt', confidence_threshold=0.25):
+def detect_and_save_results(input_image_dir, output_image_dir, output_label_dir, map, camera, model_path='yolov8n.pt', confidence_threshold=0.25):
     # 出力ディレクトリが存在しない場合は作成
-    os.makedirs(os.path.abspath(output_dir), exist_ok=True)
-    os.makedirs(os.path.join(os.path.abspath(output_dir), 'images'), exist_ok=True)
-    os.makedirs(os.path.join(os.path.abspath(output_dir), 'labels'), exist_ok=True)
+    output_image_dir = os.path.join(output_image_dir, map, camera)
+    output_label_dir = os.path.join(output_label_dir, map, camera)
+    os.makedirs(output_image_dir, exist_ok=True)
+    os.makedirs(output_label_dir, exist_ok=True)
 
     # YOLOv8モデルのロード
     print(f"Loading YOLOv8 model from: {model_path}")
@@ -71,39 +73,43 @@ def detect_and_save_results(image_dir, output_dir, model_path='yolov8n.pt', conf
     print("Model loaded successfully.")
 
     # ディレクトリ内の画像を処理
-    for path in os.listdir(image_dir):
-        image_path = os.path.join(image_dir, path)
+    count = 0
+    for path in os.listdir(input_image_dir):
+        image_path = os.path.join(input_image_dir, path)
         image = cv2.imread(image_path)
         output = predict_image(model, image, conf_threshold=confidence_threshold)
         print(f"processed {path}")
         annotated_image = draw_bbox(image, output)
-        annotated_image_path = os.path.join(output_dir, 'images', path)
+        annotated_image_path = os.path.join(output_image_dir, f"{count:06d}.png")
         cv2.imwrite(annotated_image_path, annotated_image)
         print(f"saveed annotated image to {annotated_image_path}")
         labels = list()
         for bbox in output:
             xmin = bbox['xmin']
-            ymin = bbox['ymin']
             xmax = bbox['xmax']
+            ymin = bbox['ymin']
             ymax = bbox['ymax']
             cls_id = bbox['class_id']
             conf = bbox['confidence']
             
-            labels.append([cls_id, xmin, ymin, xmax, ymax, conf])
-        label_path = os.path.join(output_dir, 'labels', f"{path}.csv")
+            labels.append([cls_id, xmin, xmax, ymin, ymax, conf])
+        label_path = os.path.join(output_label_dir, f"{count:06d}.csv")
         with open(label_path, 'w') as f:
             writer = csv.writer(f)
-            writer.writerow(['class_id', 'xmin', 'ymin', 'xmax', 'ymax', 'confidence'])
+            writer.writerow(['class_id', 'xmin', 'xmax', 'ymin', 'ymax', 'confidence'])
             for label in labels:
                 writer.writerow(label)
         print(f"saved labels to {label_path}")
+        count += 1
 
 if __name__ == "__main__":
     yolov8_model_to_use = 'yolov8n.pt' 
     conf_threshold = 0.5
     input_base_dir = "C:\CARLA_Latest\WindowsNoEditor\output\image"
-    output_base_dir = "yolov8_results"
-    os.makedirs(output_base_dir, exist_ok=True)
+    output_image_dir = "yolov8_results/images"
+    output_label_dir = "yolov8_results/labels"
+    os.makedirs(output_image_dir, exist_ok=True)
+    os.makedirs(output_label_dir, exist_ok=True)
     map = "Town01_Opt"
     cameras = ["front", "left_1", "right_1"]
     for camera in cameras:
@@ -112,8 +118,6 @@ if __name__ == "__main__":
             print(f"Input directory does not exist: {input_images_directory}")
             continue
         
-        output_results_directory = os.path.join(output_base_dir, map, camera)
-        os.makedirs(output_results_directory, exist_ok=True)
-        detect_and_save_results(input_images_directory, output_results_directory, yolov8_model_to_use, conf_threshold)
+        detect_and_save_results(input_images_directory, output_image_dir, output_label_dir, map, camera, yolov8_model_to_use, conf_threshold)
     
     print("All images processed. Check the 'yolov8_results' directory.")

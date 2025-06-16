@@ -32,8 +32,9 @@ def spawn_npc_vehicles(world, bp, traffic_manager, spawn_points, car_ratio):
     num_spawn_points = len(spawn_points)
     vehicles = list()
     num_vehicles = int(num_spawn_points * car_ratio)
+    car_bps = [v for v in bp.filter('vehicle.*') if 'bike' not in v.id and 'bicycle' not in v.id and 'motorcycle' not in v.id and 'vespa' not in v.id]
     for i in range(num_vehicles):
-        vehicle_bp = random.choice(bp.filter('vehicle.*'))
+        vehicle_bp = random.choice(car_bps)
         transform = spawn_points[i+1]
         npc = world.try_spawn_actor(vehicle_bp, transform)
         if npc:
@@ -63,7 +64,7 @@ def spawn_npc_pedestrians(world, bp, num_walkers):
     return pedestrians, walker_controllers
 
 def spawn_Ego_vehicles(client, world, bp, spawn_points):
-    spawn_point = spawn_points[-1]
+    spawn_point = spawn_points[-2]
     ego_vehicle = world.try_spawn_actor(bp, spawn_point)
     if ego_vehicle:
         ego_vehicle.set_autopilot(True)

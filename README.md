@@ -14,9 +14,7 @@
     + carla.Actorはsemantic_tags(list[int])とtype_id(str)を属性に持つ
 + 画像の保存に時間がかかりすぎる
     + 並列処理か何か
-+ GTと検出結果のフォーマットの整合性チェック
-    + -> xmin, yminとxmin,xmaxで並び順が違う
-    
++ 画像間の物体の位置のずれの正しい修正    
 
 ### 次のステップ
 + 関連研究集め

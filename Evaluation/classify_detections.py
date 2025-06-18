@@ -79,8 +79,14 @@ class Dataset:
                     class_id = self.class_Map.get(int(parts[0]), -1)  #-1（無視するクラス）
                     if class_id == -1:
                         continue
-                    xmin = float(parts[1])
-                    xmax = float(parts[2])
+                    if camera_detection_dir.endswith('front'):
+                        offset = 0.0
+                    elif camera_detection_dir.endswith('left_1'):
+                        offset = -22.0
+                    elif camera_detection_dir.endswith('right_1'):
+                        offset = 22.0
+                    xmin = float(parts[1]) + offset
+                    xmax = float(parts[2]) + offset
                     ymin = float(parts[3])
                     ymax = float(parts[4])
                     confidence = float(parts[5])
@@ -148,7 +154,6 @@ def main():
     gt_dir = 'C:/CARLA_Latest/WindowsNoEditor/output/label/Town01_Opt/front'
     detection_dir = 'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/yolov8_results/labels/Town01_Opt'
     cameras = os.listdir(detection_dir)
-    
     dataset = Dataset(gt_dir, detection_dir, cameras)
     print(f"gt:{dataset.gt[0]}")
     print(f"front: {dataset.detections['front'][0]}")

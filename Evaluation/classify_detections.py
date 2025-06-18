@@ -97,6 +97,9 @@ class Dataset:
             for camera in self.cameras:
                 buffer = dict()
                 for class_id, bboxes in self.detections[camera][i].items():
+                    if class_id not in frame_affirmative:
+                        buffer[class_id] = bboxes
+                        continue
                     for bbox in bboxes:
                         matched = False
                         for other_bbox in frame_affirmative[class_id]:
@@ -108,10 +111,11 @@ class Dataset:
                                 buffer[class_id] = list()
                             buffer[class_id].append(bbox)
                 for class_id, bboxes in buffer.items():
-                    if class_id not in affirmative_detections:
-                        affirmative_detections[class_id] = list()
+                    if class_id not in frame_affirmative:
+                        frame_affirmative[class_id] = list()
                     for bbox in bboxes:
-                        affirmative_detections[class_id].append(bbox)                
+                        frame_affirmative[class_id].append(bbox)
+            affirmative_detections.append(frame_affirmative)
         return affirmative_detections
     
     def unanimous_detections(self, detectinos) -> list:
@@ -130,7 +134,6 @@ class Dataset:
                                 mathced = True
                                 break
                         if not mathced:
-                            print(f"not matched: {camera} {class_id} {base_bbox}")
                             unanimous = False
                             break
                     if unanimous:
@@ -138,7 +141,6 @@ class Dataset:
                             frame_unanimous[class_id] = list()
                         frame_unanimous[class_id].append(base_bbox)
             unanimous_detections.append(frame_unanimous)
-            break
             
         return unanimous_detections
     
@@ -152,8 +154,13 @@ def main():
     print(f"front: {dataset.detections['front'][0]}")
     print(f"left_1: {dataset.detections['left_1'][0]}")
     print(f"right_1: {dataset.detections['right_1'][0]}")
+    affirmative = dataset.affirmative_detections()
     unanimous = dataset.unanimous_detections(dataset.detections)
-    print(f"unanimous detections: {unanimous}")
+    for key, bboxes in affirmative[0].items():
+        print(f"{key}")
+        for bbox in bboxes:
+            print(f"  {bbox}")
+    print(f"unanimous detections: {unanimous[0]}")
     
     
         

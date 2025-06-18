@@ -20,8 +20,26 @@ class Evaluation:
         self.dataset = dataset
         
     def cov_od(self):
-        pass
-        
+        total_obj = self.dataset.total_objects()
+        common_fp = self.dataset.common_false_positives()
+        common_fn = self.dataset.common_false_negatives()
+        cov_od = 0
+        for frame in range(self.dataset.num_frames):
+            frame_obj = total_obj[frame]
+            num_obj = sum(len(bboxes) for bboxes in frame_obj.values())
+            
+            frame_fp = common_fp[frame]
+            num_fp = sum(len(bboxes) for bboxes in frame_fp.values())
+            
+            frame_fn = common_fn[frame]
+            num_fn = sum(len(bboxes) for bboxes in frame_fn.values())
+
+            if num_obj == 0:
+                cov_od += 0
+            else:
+                cov_od += (num_fp+num_fn)/(num_obj)
+        return 1-(cov_od/self.dataset.num_frames)
+    
 class Dataset:
     class_Map = {
         0: 0,  #pedestrian
@@ -304,48 +322,25 @@ class Dataset:
 def main():
     gt_dir = 'C:/CARLA_Latest/WindowsNoEditor/output/label/Town01_Opt/front'
     detection_dir = 'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/yolov8_results/labels/Town01_Opt'
-    cameras = os.listdir(detection_dir)
-    # データセットを一度だけロードし、キャッシュする
-    cache_file = 'dataset_cache.pkl'
-    if os.path.exists(cache_file):
-        print(f"Loading dataset from cache: {cache_file}")
-        with open(cache_file, 'rb') as f:
-            dataset = pickle.load(f)
-    else:
-        print("Loading dataset from raw files...")
-        dataset = Dataset(gt_dir, detection_dir, cameras)
-        with open(cache_file, 'wb') as f:
-            pickle.dump(dataset, f)
-        print(f"Dataset cached to {cache_file}")
-    dataset = Dataset(gt_dir, detection_dir, cameras)
-    print(f"gt:{dataset.gt[0]}")
-    print(f"front: {dataset.detections['front'][0]}")
-    print(f"left_1: {dataset.detections['left_1'][0]}")
-    print(f"right_1: {dataset.detections['right_1'][0]}")
+    num_versions = [1, 2, 3]
+    for num_version in num_versions:
+        # データセットを一度だけロードし、キャッシュする
+        cameras = os.listdir(detection_dir)[:num_version]
+        cache_file = f'dataset_{len(cameras)}_cache.pkl'
+        if os.path.exists(cache_file):
+            print(f"Loading dataset from cache: {cache_file}")
+            with open(cache_file, 'rb') as f:
+                dataset = pickle.load(f)
+        else:
+            print("Loading dataset from raw files...")
+            dataset = Dataset(gt_dir, detection_dir, cameras)
+            with open(cache_file, 'wb') as f:
+                pickle.dump(dataset, f)
+            print(f"Dataset cached to {cache_file}")
+        dataset = Dataset(gt_dir, detection_dir, cameras)    
+        eval = Evaluation(dataset)
+        print(f"{num_version} version")
+        print(f"    {eval.cov_od()}")
     
-    # common_fp = dataset.common_false_positives()
-    # common_fn = dataset.common_false_negatives()
-    # for i in range(dataset.num_frames):
-    #     frame_fp = common_fp[i]
-    #     frame_fn = common_fn[i]
-    #     if not (frame_fp or frame_fn):
-    #         continue
-    #     print(f"frame:{i}")
-    #     if frame_fp:
-    #         print("false positeive")
-    #         for class_id, bboxes in frame_fp.items():
-    #             print(f"class:{class_id}")
-    #             for bbox in bboxes:
-    #                 print(f"    {bbox}")
-    #     if frame_fn:
-    #         print("false negative")
-    #         for class_id, bboxes in frame_fn.items():
-    #             print(f"class:{class_id}")
-    #             for bbox in bboxes:
-    #                 print(f"    {bbox}")
-    total_obj = dataset.total_objects()
-    print(dataset.affirmative_false_positives()[200])
-    print(dataset.gt[200])
-    print(total_obj[200])
 if __name__ == "__main__":
     main()

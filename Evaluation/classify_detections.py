@@ -1,8 +1,6 @@
 import os 
 import cv2
 
-
-
 def iou(box1, box2):
     axmin, axmax, aymin, aymax, _ = box1
     bxmin, bxmax, bymin, bymax, _ = box2
@@ -16,10 +14,6 @@ def iou(box1, box2):
     intersection = max(0, abxmax - abxmin) * max(0, abymax - abymin)
     union = area_a + area_b - intersection
     return intersection / union if union > 0 else 0
-
-
-def unanimous_detections():
-    pass
 
 
 class Dataset:
@@ -95,6 +89,30 @@ class Dataset:
                     frame_detections[class_id].append((xmin, xmax, ymin, ymax, confidence))
                 detections.append(frame_detections)
         return detections
+    
+    def affirmative_detections(self) -> list:
+        affirmative_detections = list()
+        for i in range(self.num_frames):
+            frame_affirmative = dict()
+            for camera in self.cameras:
+                buffer = dict()
+                for class_id, bboxes in self.detections[camera][i].items():
+                    for bbox in bboxes:
+                        matched = False
+                        for other_bbox in frame_affirmative[class_id]:
+                            if iou(bbox, other_bbox) > 0.5:
+                                matched = True
+                                break
+                        if not matched:
+                            if class_id not in buffer:
+                                buffer[class_id] = list()
+                            buffer[class_id].append(bbox)
+                for class_id, bboxes in buffer.items():
+                    if class_id not in affirmative_detections:
+                        affirmative_detections[class_id] = list()
+                    for bbox in bboxes:
+                        affirmative_detections[class_id].append(bbox)                
+        return affirmative_detections
     
     def unanimous_detections(self, detectinos) -> list:
         unanimous_detections = list()

@@ -21,7 +21,9 @@ COCO_LABELS = [
     "hair drier", "toothbrush"
 ]
 
-def predict_image(model, image, conf_threshold=0.25):
+SIZE_THRESHOLD=0.01
+
+def predict_image(model, image, size_threshold, conf_threshold=0.25):
     output = list()
     results = model(image, conf=conf_threshold, verbose=False)
     result = results[0]
@@ -29,6 +31,9 @@ def predict_image(model, image, conf_threshold=0.25):
     for bbox in bboxes:
         if bbox.conf > conf_threshold:
             xmin, ymin, xmax, ymax = bbox.xyxy[0].tolist()
+            size = (xmax-xmin)*(ymax-ymin)
+            if size < size_threshold:
+                continue
             class_id = int(bbox.cls[0])
             conf = bbox.conf[0].item()
             label = COCO_LABELS[class_id] if class_id < len(COCO_LABELS) else 'unknown'
@@ -62,10 +67,10 @@ def draw_bbox(image, bboxes):
 
 def detect_and_save_results(input_image_dir, output_image_dir, output_label_dir, map, camera, model_path='yolov8n.pt', confidence_threshold=0.25):
     # 出力ディレクトリが存在しない場合は作成
-    output_image_dir = os.path.join(output_image_dir, map, camera)
-    output_label_dir = os.path.join(output_label_dir, map, camera)
-    os.makedirs(output_image_dir, exist_ok=True)
-    os.makedirs(output_label_dir, exist_ok=True)
+    # output_image_dir = os.path.join(output_image_dir, map, camera)
+    # output_label_dir = os.path.join(output_label_dir, map, camera)
+    # os.makedirs(output_image_dir, exist_ok=True)
+    # os.makedirs(output_label_dir, exist_ok=True)
 
     # YOLOv8モデルのロード
     print(f"Loading YOLOv8 model from: {model_path}")
@@ -77,7 +82,7 @@ def detect_and_save_results(input_image_dir, output_image_dir, output_label_dir,
     for path in os.listdir(input_image_dir):
         image_path = os.path.join(input_image_dir, path)
         image = cv2.imread(image_path)
-        output = predict_image(model, image, conf_threshold=confidence_threshold)
+        output = predict_image(model, image, size_threshold=SIZE_THRESHOLD, conf_threshold=confidence_threshold)
         print(f"processed {path}")
         annotated_image = draw_bbox(image, output)
         annotated_image_path = os.path.join(output_image_dir, f"{count:06d}.png")

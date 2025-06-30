@@ -6,6 +6,7 @@ TIMEOUT = 10
 MAP = "Town10HD_Opt"
 TIME_DURATION = 1000 # シミュレーション時間（秒）
 VALID_DISTANCE = 50 # バウンディングボックス検出の最大距離
+SIZE_THRESHOLD = 0.01
 FIXED_DELTA_SECONDS = 0.05 # シミュレーションのステップ時間
 
 CAR_RATIO = 0.5 # NPC車両のスポーン割合

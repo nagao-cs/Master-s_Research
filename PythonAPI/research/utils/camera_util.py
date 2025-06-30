@@ -92,9 +92,9 @@ def calculate_yolo_bbox(points_2d, img_width, img_height):
 
     return (xmin, xmax, ymin, ymax)
 
-def process_camera_data(image, camera_actor, world, K, K_b, display_window_name):
+def process_camera_data(image, camera_actor, world, K, K_b, display_window_name, size_threshold):
     # RGB配列に整形
-    img_display = image.copy() # デバッグ表示用 (バウンディングボックスを描画)
+    img_display = image.copy() # バウンディングボックスを描画用
 
     # ワールドからカメラへの変換行列を取得
     world_to_camera = np.array(camera_actor.get_transform().get_inverse_matrix())
@@ -113,25 +113,28 @@ def process_camera_data(image, camera_actor, world, K, K_b, display_window_name)
         for bbox in boundingboxes:
             dist = bbox.location.distance(camera_location)
 
-            if dist < VALID_DISTANCE:
-                ray = bbox.location - camera_location
-                
-                if camera_forward_vec.dot(ray) > 0: # カメラの視野角内（前方）にあるかを確認
-                    verts = [v for v in bbox.get_world_vertices(carla.Transform())]
-                    points_2d_on_image = []
+            # if dist < VALID_DISTANCE:
+            ray = bbox.location - camera_location
+            
+            if camera_forward_vec.dot(ray) > 0: # カメラの視野角内（前方）にあるかを確認
+                verts = [v for v in bbox.get_world_vertices(carla.Transform())]
+                points_2d_on_image = []
 
-                    for vert in verts:
-                        ray_vert = vert - camera_location
-                        if camera_forward_vec.dot(ray_vert) > 0: 
-                            p = get_image_point(vert, K, world_to_camera)
-                            points_2d_on_image.append(p)
-                    
-                    yolo_bbox = calculate_yolo_bbox(points_2d_on_image, IM_WIDTH, IM_HEIGHT)
-                    
-                    if yolo_bbox:
-                        xmin, xmax, ymin, ymax = yolo_bbox
-                        class_id = CLASS_MAPPING[category_label]
-                        frame_labels.append([class_id, xmin, xmax, ymin, ymax, dist])
+                for vert in verts:
+                    ray_vert = vert - camera_location
+                    if camera_forward_vec.dot(ray_vert) > 0: 
+                        p = get_image_point(vert, K, world_to_camera)
+                        points_2d_on_image.append(p)
+                
+                yolo_bbox = calculate_yolo_bbox(points_2d_on_image, IM_WIDTH, IM_HEIGHT)
+                
+                if yolo_bbox:
+                    xmin, xmax, ymin, ymax = yolo_bbox
+                    size = (xmax-xmin)*(ymax-ymin)
+                    if size < size_threshold:
+                        continue
+                    class_id = CLASS_MAPPING[category_label]
+                    frame_labels.append([class_id, xmin, xmax, ymin, ymax, dist])
                 
         
     # bboxをdist,xminとyminでソート

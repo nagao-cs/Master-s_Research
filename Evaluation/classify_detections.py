@@ -1,5 +1,5 @@
 import os 
-import cv2
+import pickle
 
 def iou(box1, box2):
     axmin, axmax, aymin, aymax, _ = box1
@@ -20,8 +20,26 @@ class Evaluation:
         self.dataset = dataset
         
     def cov_od(self):
-        pass
-        
+        total_obj = self.dataset.total_objects()
+        common_fp = self.dataset.common_false_positives()
+        common_fn = self.dataset.common_false_negatives()
+        cov_od = 0
+        for frame in range(self.dataset.num_frames):
+            frame_obj = total_obj[frame]
+            num_obj = sum(len(bboxes) for bboxes in frame_obj.values())
+            
+            frame_fp = common_fp[frame]
+            num_fp = sum(len(bboxes) for bboxes in frame_fp.values())
+            
+            frame_fn = common_fn[frame]
+            num_fn = sum(len(bboxes) for bboxes in frame_fn.values())
+
+            if num_obj == 0:
+                cov_od += 0
+            else:
+                cov_od += (num_fp+num_fn)/(num_obj)
+        return 1-(cov_od/self.dataset.num_frames)
+    
 class Dataset:
     class_Map = {
         0: 0,  #pedestrian
@@ -130,7 +148,7 @@ class Dataset:
             affirmative_detections.append(frame_affirmative)
         return affirmative_detections
     
-    def unanimous_detections(self, detectinos) -> list:
+    def unanimous_detections(self) -> list:
         unanimous_detections = list()
         for i in range(self.num_frames):
             frame_unanimous = dict()
@@ -156,30 +174,86 @@ class Dataset:
             
         return unanimous_detections
     
-    def camera_false_positives(self, camera):
-        false_positives = list()
+    def common_false_positives(self) -> list:
+        common_fp = list()
         for i in range(self.num_frames):
-            frame_detections = self.detections[camera][i]
-            frame_gt = self.gt[i]
             frame_fp = dict()
-            for class_id, bboxes in frame_detections.items():
-                if class_id not in frame_gt:
-                    frame_fp[class_id] = bboxes
-                else:
-                    for bbox in bboxes:
+            camera_fps = [self.camera_false_positives(camera, i) for camera in self.cameras]
+            if min(len(camera_fp) for camera_fp in camera_fps) == 0:
+                common_fp.append(frame_fp)
+                continue
+            base_fps = camera_fps[0]
+            for class_id, bboxes in base_fps.items():
+                for bbox in bboxes:
+                    unanimous = True
+                    for other_camera_fns in camera_fps[1:]:
                         matched = False
-                        for gt_bbox in frame_gt[class_id]:
-                            if iou(bbox, gt_bbox) > 0.5:
+                        other_bboxes = other_camera_fns.get(class_id, [])
+                        for other_bbox in other_bboxes:
+                            if iou(bbox, other_bbox) > 0.5:
                                 matched = True
                                 break
                         if not matched:
-                            if class_id not in frame_fp:
-                                frame_fp[class_id] = list()
-                            frame_fp[class_id].append(bbox)
-            false_positives.append(frame_fp)
-        return false_positives
+                            unanimous = False
+                            break
+                    if unanimous:
+                        if class_id not in frame_fp:
+                            frame_fp[class_id] = list()
+                        frame_fp[class_id].append(bbox)    
+            common_fp.append(frame_fp)
+        return common_fp
     
-    def common_false_negatives(self):
+    def affirmative_false_positives(self) -> list:
+        affirmative_fps = list()
+        for frame in range(self.num_frames):
+            frame_fp = dict()
+            camera_fps = [self.camera_false_positives(camera, frame) for camera in self.cameras]
+            for i in range(len(self.cameras)):
+                buffer = dict()
+                for class_id, bboxes in camera_fps[i].items():
+                    if class_id not in frame_fp:
+                        buffer[class_id] = bboxes
+                        continue
+                    for bbox in bboxes:
+                        matched = False
+                        for other_bbox in frame_fp[class_id]:
+                            if iou(bbox, other_bbox) > 0.5:
+                                matched = True
+                                break
+                        if not matched:
+                            if class_id not in buffer:
+                                buffer[class_id] = list()
+                            buffer[class_id].append(bbox)
+                for class_id, bboxes in buffer.items():
+                    if class_id not in frame_fp:
+                        frame_fp[class_id] = list()
+                    for bbox in bboxes:
+                        frame_fp[class_id].append(bbox)
+            affirmative_fps.append(frame_fp)
+        
+        return affirmative_fps
+    
+    def camera_false_positives(self, camera, frame) -> dict:
+        frame_detections = self.detections[camera][frame]
+        frame_gt = self.gt[frame]
+        frame_fp = dict()
+        for class_id, bboxes in frame_detections.items():
+            if class_id not in frame_gt:
+                frame_fp[class_id] = bboxes
+            else:
+                for bbox in bboxes:
+                    matched = False
+                    for gt_bbox in frame_gt[class_id]:
+                        if iou(bbox, gt_bbox) > 0.5:
+                            matched = True
+                            break
+                    if not matched:
+                        if class_id not in frame_fp:
+                            frame_fp[class_id] = list()
+                        frame_fp[class_id].append(bbox)
+        return frame_fp
+    
+    def common_false_negatives(self) -> list:
         common_fn = list()
         for i in range(self.num_frames):
             frame_fn = dict()
@@ -227,34 +301,46 @@ class Dataset:
                             frame_fn[class_id] = list()
                         frame_fn[class_id].append(gt_bbox)
         return frame_fn
-    
+
+    def total_objects(self) -> list:
+        total_objects = list()
+        fps = self.affirmative_false_positives()
+        for frame in range(self.num_frames):
+            frame_fp = fps[frame]
+            gt = self.gt[frame]
+            frame_object = dict()
+            for class_id, bboxes in frame_fp.items():
+                frame_object[class_id] = bboxes
+            for class_id, bboxes in gt.items():
+                if class_id not in frame_object:
+                    frame_object[class_id] = list()
+                frame_object[class_id].extend(bboxes)
+            total_objects.append(frame_object)
+        return total_objects
+            
     
 def main():
     gt_dir = 'C:/CARLA_Latest/WindowsNoEditor/output/label/Town01_Opt/front'
     detection_dir = 'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/yolov8_results/labels/Town01_Opt'
-    cameras = os.listdir(detection_dir)
-    dataset = Dataset(gt_dir, detection_dir, cameras)
-    print(f"gt:{dataset.gt[0]}")
-    print(f"front: {dataset.detections['front'][0]}")
-    print(f"left_1: {dataset.detections['left_1'][0]}")
-    print(f"right_1: {dataset.detections['right_1'][0]}")
-    # affirmative = dataset.affirmative_detections()
-    # unanimous = dataset.unanimous_detections(dataset.detections)
-    # for key, bboxes in affirmative[0].items():
-    #     print(f"{key}")
-    #     for bbox in bboxes:
-    #         print(f"  {bbox}")
-    # print(f"unanimous detections: {unanimous[0]}")
+    num_versions = [1, 2, 3]
+    for num_version in num_versions:
+        # データセットを一度だけロードし、キャッシュする
+        cameras = os.listdir(detection_dir)[:num_version]
+        cache_file = f'dataset_{len(cameras)}_cache.pkl'
+        if os.path.exists(cache_file):
+            print(f"Loading dataset from cache: {cache_file}")
+            with open(cache_file, 'rb') as f:
+                dataset = pickle.load(f)
+        else:
+            print("Loading dataset from raw files...")
+            dataset = Dataset(gt_dir, detection_dir, cameras)
+            with open(cache_file, 'wb') as f:
+                pickle.dump(dataset, f)
+            print(f"Dataset cached to {cache_file}")
+        dataset = Dataset(gt_dir, detection_dir, cameras)    
+        eval = Evaluation(dataset)
+        print(f"{num_version} version")
+        print(f"    {eval.cov_od()}")
     
-    common_fn = dataset.common_false_negatives()
-    for i, frame_fn in enumerate(common_fn):
-        if not frame_fn:
-            continue
-        print(f"Frame {i}:")
-        for class_id, bboxes in frame_fn.items():
-            print(f"  Class {class_id}:")
-            for bbox in bboxes:
-                print(f"    {bbox}")
-        
 if __name__ == "__main__":
     main()

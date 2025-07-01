@@ -92,9 +92,9 @@ def calculate_yolo_bbox(points_2d, img_width, img_height):
 
     return (xmin, xmax, ymin, ymax)
 
-def process_camera_data(image, camera_actor, world, K, K_b, display_window_name):
+def process_camera_data(image, camera_actor, world, K, K_b, display_window_name, size_threshold):
     # RGB配列に整形
-    img_display = image.copy() # デバッグ表示用 (バウンディングボックスを描画)
+    img_display = image.copy() # バウンディングボックスを描画用
 
     # ワールドからカメラへの変換行列を取得
     world_to_camera = np.array(camera_actor.get_transform().get_inverse_matrix())

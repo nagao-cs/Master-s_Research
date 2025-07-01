@@ -73,7 +73,7 @@ def main():
                 camera_actor = cameras[i]
                 display_name = f'Carla Camera {i+1} with Bounding Boxes'
                 
-                frame_labels, bbox_image = camera_util.process_camera_data(image, camera_actor, world, K, K_b, display_name)
+                frame_labels, bbox_image = camera_util.process_camera_data(image, camera_actor, world, K, K_b, display_name, size_threshold=SIZE_THRESHOLD)
                 img_save_que = row_image_ques[i]
                 img_save_que.put(image)
                 bbox_save_que = bbox_image_ques[i]

@@ -4,7 +4,7 @@ import math
 import numpy as np
 import cv2
 import os
-from utils.config import IM_WIDTH, IM_HEIGHT, FOV, VALID_DISTANCE, CLASS_MAPPING, XMIN, XMAX, YMIN, YMAX, DIST
+from utils.config import IM_WIDTH, IM_HEIGHT, FOV, VALID_DISTANCE, CLASS_MAPPING, XMIN, XMAX, YMIN, YMAX, DIST, SIZE_THRESHOLD
 
 def setting_camera(world, bp_library, ego_vehicle, im_width, im_height, fov, num_camera):
     cameras = list()
@@ -130,8 +130,11 @@ def process_camera_data(image, camera_actor, world, K, K_b, display_window_name)
                     
                     if yolo_bbox:
                         xmin, xmax, ymin, ymax = yolo_bbox
-                        class_id = CLASS_MAPPING[category_label]
-                        frame_labels.append([class_id, xmin, xmax, ymin, ymax, dist])
+                        size = (xmax - xmin) * (ymax - ymin)
+                        if size > SIZE_THRESHOLD:
+                            # print(size)
+                            class_id = CLASS_MAPPING[category_label]
+                            frame_labels.append([class_id, xmin, xmax, ymin, ymax, dist])
                 
         
     # bboxをdist,xminとyminでソート

@@ -25,6 +25,7 @@ def main():
     world = carla_util.apply_settings(world, synchronous_mode=True, fixed_delta_seconds=FIXED_DELTA_SECONDS)
     traffic_manager, tm_port = carla_util.setting_traffic_manager(client, synchronous_mode=True)
     spawn_points = world.get_map().get_spawn_points()
+    print(f"spawn_points:{len(spawn_points)}")
     
     # === NPC車両スポーン ===
     vehicles = carla_util.spawn_npc_vehicles(world, blueprint_library, traffic_manager, spawn_points, CAR_RATIO)
@@ -56,6 +57,7 @@ def main():
     # === シミュレーション開始 ===
     ego_vehicle.set_autopilot(True)
     try:
+        print(SIZE_THRESHOLD)
         print("シミュレーションを実行中... 'q' キーを押すと停止します。")
         duration_sec = TIME_DURATION
         num_frames = int(duration_sec / FIXED_DELTA_SECONDS)
@@ -85,52 +87,52 @@ def main():
     finally:
         print("シミュレーションが終了しました。")
         #　画像を保存
-        print("生の画像を保存中")
-        for i in range(len(cameras)):
-            img_save_que = row_image_ques[i]
-            camera = cameras[i]
-            image_dir = OUTPUT_IMG_DIR + f"/{MAP}" + f"/{camera.attributes['role_name']}"
-            os.makedirs(image_dir, exist_ok=True)
-            print(f"{camera.attributes['role_name']} の画像を保存しています...")
-            num_frame = 0
-            while not img_save_que.empty():
-                image = img_save_que.get()
-                image_path = os.path.join(image_dir, f"{num_frame:06d}.png")
-                cv2.imwrite(image_path, image)
-                num_frame += 1
-        print("生のすべての画像を保存しました。")
-        print("バウンディングボックスを描画した画像を保存中")
-        for i in range(len(cameras)):
-            bbox_save_que = bbox_image_ques[i]
-            camera = cameras[i]
-            bbox_dir = OUTPUT_IMG_DIR + f"/{MAP}" + f"/{camera.attributes['role_name']}_bbox"
-            os.makedirs(bbox_dir, exist_ok=True)
-            print(f"{camera.attributes['role_name']} のバウンディングボックスを描画した画像を保存しています...")
-            num_frame = 0
-            while not bbox_save_que.empty():
-                bbox_image = bbox_save_que.get()
-                bbox_image_path = os.path.join(bbox_dir, f"{num_frame:06d}.png")
-                cv2.imwrite(bbox_image_path, bbox_image)
-                num_frame += 1
-        # ラベルを保存
-        print("ラベルを保存中") 
-        for i in range(len(cameras)):
-            label_save_que = label_ques[i]
-            camera = cameras[i]
-            label_dir = OUTPUT_LABEL_DIR + f"/{MAP}" + f"/{camera.attributes['role_name']}"
-            os.makedirs(label_dir, exist_ok=True)
-            print(f"{camera.attributes['role_name']} のラベルを保存しています...")
-            num_frame = 0
-            while not label_save_que.empty():
-                labels = label_save_que.get()
-                label_path = os.path.join(label_dir, f"{num_frame:06d}.csv")
-                with open(label_path, 'w') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(['class_id', 'xmin', 'xmax', 'ymin', 'ymax', 'distance'])
-                    for label in labels:
-                        writer.writerow(label)
-                num_frame += 1
-        print("すべてのラベルを保存しました。")
+        # print("生の画像を保存中")
+        # for i in range(len(cameras)):
+        #     img_save_que = row_image_ques[i]
+        #     camera = cameras[i]
+        #     image_dir = OUTPUT_IMG_DIR + f"/{MAP}" + f"/{camera.attributes['role_name']}"
+        #     os.makedirs(image_dir, exist_ok=True)
+        #     print(f"{camera.attributes['role_name']} の画像を保存しています...")
+        #     num_frame = 0
+        #     while not img_save_que.empty():
+        #         image = img_save_que.get()
+        #         image_path = os.path.join(image_dir, f"{num_frame:06d}.png")
+        #         cv2.imwrite(image_path, image)
+        #         num_frame += 1
+        # print("生のすべての画像を保存しました。")
+        # print("バウンディングボックスを描画した画像を保存中")
+        # for i in range(len(cameras)):
+        #     bbox_save_que = bbox_image_ques[i]
+        #     camera = cameras[i]
+        #     bbox_dir = OUTPUT_IMG_DIR + f"/{MAP}" + f"/{camera.attributes['role_name']}_bbox"
+        #     os.makedirs(bbox_dir, exist_ok=True)
+        #     print(f"{camera.attributes['role_name']} のバウンディングボックスを描画した画像を保存しています...")
+        #     num_frame = 0
+        #     while not bbox_save_que.empty():
+        #         bbox_image = bbox_save_que.get()
+        #         bbox_image_path = os.path.join(bbox_dir, f"{num_frame:06d}.png")
+        #         cv2.imwrite(bbox_image_path, bbox_image)
+        #         num_frame += 1
+        # # ラベルを保存
+        # print("ラベルを保存中") 
+        # for i in range(len(cameras)):
+        #     label_save_que = label_ques[i]
+        #     camera = cameras[i]
+        #     label_dir = OUTPUT_LABEL_DIR + f"/{MAP}" + f"/{camera.attributes['role_name']}"
+        #     os.makedirs(label_dir, exist_ok=True)
+        #     print(f"{camera.attributes['role_name']} のラベルを保存しています...")
+        #     num_frame = 0
+        #     while not label_save_que.empty():
+        #         labels = label_save_que.get()
+        #         label_path = os.path.join(label_dir, f"{num_frame:06d}.csv")
+        #         with open(label_path, 'w') as f:
+        #             writer = csv.writer(f)
+        #             writer.writerow(['class_id', 'xmin', 'xmax', 'ymin', 'ymax', 'distance'])
+        #             for label in labels:
+        #                 writer.writerow(label)
+        #         num_frame += 1
+        # print("すべてのラベルを保存しました。")
         
         carla_util.cleanup(client, world, vehicles, pedestrians, walker_controllers, cameras)
         cv2.destroyAllWindows() # OpenCVウィンドウを閉じる

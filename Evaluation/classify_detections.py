@@ -75,6 +75,9 @@ class Dataset:
                     ymin = int(float(parts[3]))
                     ymax = int(float(parts[4]))
                     distance = float(parts[5])
+                    size = (xmax-xmin) * (ymax-ymin)
+                    if size < 100:
+                        continue
                     if class_id not in frame_gt:
                         frame_gt[class_id] = list()
                     frame_gt[class_id].append((xmin, xmax, ymin, ymax, distance))

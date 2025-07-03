@@ -320,13 +320,14 @@ class Dataset:
             
     
 def main():
-    gt_dir = 'C:/CARLA_Latest/WindowsNoEditor/output/label/Town01_Opt/front'
-    detection_dir = 'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/yolov8_results/labels/Town01_Opt'
+    map = 'Town10HD_Opt'
+    gt_dir = f'C:/CARLA_Latest/WindowsNoEditor/output/label/{map}/front'
+    detection_dir = f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/yolov8_results/labels/{map}'
     num_versions = [1, 2, 3]
     for num_version in num_versions:
         # データセットを一度だけロードし、キャッシュする
         cameras = os.listdir(detection_dir)[:num_version]
-        cache_file = f'dataset_{len(cameras)}_cache.pkl'
+        cache_file = f'dataset_{map}_{len(cameras)}_cache.pkl'
         if os.path.exists(cache_file):
             print(f"Loading dataset from cache: {cache_file}")
             with open(cache_file, 'rb') as f:

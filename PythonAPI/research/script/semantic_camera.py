@@ -35,7 +35,7 @@ def main():
     camera.listen(lambda image: semantic_callback(image, image_queue))
 
     try:
-        for _ in range(1000):  # 100フレーム取得して終了
+        for _ in range(10000):  # 100フレーム取得して終了
             world.tick()
 
             if image_queue.empty():

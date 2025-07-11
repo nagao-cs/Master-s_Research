@@ -118,6 +118,7 @@ def main():
     # === Ego車両スポーン（最後） ===
     ego_bp = blueprint_library.find('vehicle.lincoln.mkz_2020')
     ego_vehicle = carla_util.spawn_Ego_vehicles(client, world, ego_bp, spawn_points)
+    ego_id = ego_vehicle.id
     
     # === カメラセンサの設定 ===
     camera_bp = blueprint_library.find('sensor.camera.rgb')
@@ -133,13 +134,13 @@ def main():
     # === semantic lidarセンサの設定 ===
     lidar_bp = blueprint_library.find('sensor.lidar.ray_cast_semantic')
     # 水平視野角を360度にする
-    lidar_bp.set_attribute('horizontal_fov', '360.0')
+    lidar_bp.set_attribute('horizontal_fov', '180.0')
     # 回転周波数をFPSと同じにする (1ステップで360度データを得るため)
     lidar_bp.set_attribute('rotation_frequency', '20.0')  # 20Hz
     # センサーティックを0.0に設定し、可能な限り高速でデータを取得する (各シミュレーションステップ)
     lidar_bp.set_attribute('sensor_tick', '0.0')
     # レーザーの数（チャネル数、デフォルト32)
-    lidar_bp.set_attribute('channels', '32')
+    lidar_bp.set_attribute('channels', '64')
     # 測定範囲（メートル単位、デフォルト10.0） [8]
     lidar_bp.set_attribute('range', '100.0')
     # 1秒あたりの点群数 (デフォルト56000)
@@ -190,9 +191,12 @@ def main():
             actors = world.get_actors()
             frame_labels = list()
             for ObjIdx, ObjTag in filtered_points.keys():
+                if ObjIdx == ego_id:
+                    continue
+                print(ObjIdx, ObjTag)
                 actor = actors.find(ObjIdx)
                 if actor:
-                    print(actor.id, actor.semantic_tags ,actor.bounding_box)
+                    # print(actor.id, actor.semantic_tags ,actor.bounding_box)
                     bbox = actor.bounding_box
                     verts = [v for v in bbox.get_world_vertices(actor.get_transform())]
                     points_2d_on_image = []

@@ -11,10 +11,10 @@ from queue import Queue
 
 def depth_to_meters(depth_image):
     array = np.frombuffer(depth_image.raw_data, dtype=np.uint8)
-    array = np.reshape(array, (depth_image.height, depth_image.width, 4))[:, :, :3]  # R, G, B
-    R = array[:, :, 0].astype(np.uint32)
+    array = np.reshape(array, (depth_image.height, depth_image.width, 4))[:, :, :3]  # B, G, R
+    B = array[:, :, 0].astype(np.uint32)
     G = array[:, :, 1].astype(np.uint32)
-    B = array[:, :, 2].astype(np.uint32)
+    R = array[:, :, 2].astype(np.uint32)
     
     normalized = (R + G * 256 + B * 256 * 256) / float(256**3 - 1)
     depth_in_meters = normalized * 1000.0  # convert to meters
@@ -28,7 +28,7 @@ def project_point(loc, K, w2c):
     img = K.dot(camera_coords[:3] / z_c)
     return int(img[0]), int(img[1]), z_c
 
-def is_visible_bbox(bbox, camera_actor, K, world_2_camera, depth_meters, threshold_visible=0, eps=1.0):
+def is_visible_bbox(bbox, camera_actor, K, world_2_camera, depth_meters, threshold_visible=1, eps=1.0):
     verts = bbox.get_world_vertices(carla.Transform())
     visible_count = 0
 
@@ -114,8 +114,10 @@ def main():
             world.tick() # シミュレーションを進める
 
             depth_image = depth_queue.get()
-            depth_gray = depth_to_meters(depth_image) 
-            # print(depth_gray.shape)
+            # print(depth_image.raw_data)
+            depth_gray = depth_to_meters(depth_image)
+            # depth_image.convert(carla.ColorConverter.Depth)
+            # print(depth_image)
             
             world_to_camera = camera.get_transform().get_inverse_matrix()
 
@@ -132,7 +134,7 @@ def main():
                 if bbox.location.distance(camera.get_location()) > 50.0:
                     continue
                 if is_visible_bbox(bbox, camera, K, world_to_camera, depth_gray, eps=0.3):
-                    print(bbox)
+                    # print(bbox)
                     verts = bbox.get_world_vertices(carla.Transform())
                     points_2d_on_image = []
                     for vert in verts:

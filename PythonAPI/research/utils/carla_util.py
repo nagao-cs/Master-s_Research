@@ -75,13 +75,20 @@ def spawn_Ego_vehicles(client, world, bp, spawn_points):
         
     return ego_vehicle
 
-def cleanup(client, world, vehicles, pedestrians, walker_controllers, cameras):
+def cleanup(client, world, vehicles, pedestrians, walker_controllers, cameras, depth_cameras):
     print("クリーンアップを開始")
     for camera in cameras:
         if camera:
             camera.stop()
             camera.destroy()
             print(f"{camera.attributes['role_name']} を破棄")
+    print(f"{len(cameras)} 台のカメラを破棄")
+    for depth_camera in depth_cameras:
+        if depth_camera:
+            depth_camera.stop()
+            depth_camera.destroy()
+            print(f"{depth_camera.attributes['role_name']} を破棄")
+    print(f"{len(depth_cameras)} 台の深度カメラを破棄")
     for vehicle in vehicles:
         if vehicle:
             vehicle.destroy()

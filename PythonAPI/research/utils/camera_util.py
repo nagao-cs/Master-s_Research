@@ -31,12 +31,32 @@ def setting_camera(world, bp_library, ego_vehicle, im_width, im_height, fov, num
         camera.listen(q.put)
         cameras.append(camera)
         ques.append(q)
-        print(f"{camera_bp.get_attribute('role_name')} カメラをスポーン")
     print(f"{len(cameras)} 台のカメラをスポーン")
-    #debug
-    for camera in cameras:
-        print(f"role:{camera.attributes['role_name']}, Location: {camera.get_location()}")
     return cameras, ques
+
+def setting_depth_camera(world, bp_library, ego_vehicle, im_width, im_height, fov, num_camera):
+    depth_cameras = list()
+    depth_ques = list()
+    depth_bp = bp_library.find('sensor.camera.depth')
+    depth_bp.set_attribute('image_size_x', str(im_width))
+    depth_bp.set_attribute('image_size_y', str(im_height))
+    depth_bp.set_attribute('fov', str(fov))
+    for i in range(num_camera):
+        if i == 0:
+            depth_transform = carla.Transform(carla.Location(x=1.5, y=0.0, z=2.0))
+        elif i % 2 == 1:
+            number = math.ceil(i / 2)
+            depth_transform = carla.Transform(carla.Location(x=1.5, y=0.3*(number), z=2.0))
+        else:
+            number = math.ceil(i / 2)
+            depth_transform = carla.Transform(carla.Location(x=1.5, y=-0.3*(number), z=2.0))
+        depth_camera = world.spawn_actor(depth_bp, depth_transform, attach_to=ego_vehicle)
+        q = Queue()
+        depth_camera.listen(q.put)
+        depth_cameras.append(depth_camera)
+        depth_ques.append(q)
+    print(f"{len(depth_cameras)} 台の深度カメラをスポーン")
+    return depth_cameras, depth_ques
 
 def create_save_queues(num_camera):
     row_image_ques = [Queue() for _ in range(num_camera)]
@@ -92,7 +112,7 @@ def calculate_yolo_bbox(points_2d, img_width, img_height):
 
     return (xmin, xmax, ymin, ymax)
 
-def process_camera_data(image, camera_actor, world, K, K_b, display_window_name, size_threshold):
+def process_camera_data(image, camera_actor, world, K, K_b, display_window_name):
     # RGB配列に整形
     img_display = image.copy() # バウンディングボックスを描画用
 
@@ -137,11 +157,11 @@ def process_camera_data(image, camera_actor, world, K, K_b, display_window_name,
                             frame_labels.append([class_id, xmin, xmax, ymin, ymax, dist])
                 
         
-    # bboxをdist,xminとyminでソート
-    frame_labels.sort(key=lambda x: (x[1], x[3]))
-    # ほかのbboxに隠れるbboxを除外
+    # # bboxをdist,xminとyminでソート
+    frame_labels.sort(key=lambda bbox: (bbox[XMIN], bbox[YMIN]))
+    # # ほかのbboxに隠れるbboxを除外
     frame_labels = remove_overlapping_bboxes(frame_labels)
-    # bboxを描画
+    # # bboxを描画
     for bbox in frame_labels:
         class_id, xmin, xmax, ymin, ymax, dist = bbox
         xmin_draw = int(xmin)
@@ -153,7 +173,7 @@ def process_camera_data(image, camera_actor, world, K, K_b, display_window_name,
         cv2.putText(img_display, f"{int(class_id)}", (xmin_draw, ymin_draw - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
     # 画像を表示
     cv2.imshow(display_window_name, img_display)
-    
+
     return frame_labels, img_display
 
 def is_contained(inner, outer):
@@ -191,3 +211,4 @@ def save_images(image_queues, cameras, output_dir, suffix=''):
             image.save_to_disk(image_path)
             num_frame += 1
     print("すべての画像を保存しました。")
+    

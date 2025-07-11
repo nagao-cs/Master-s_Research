@@ -42,9 +42,9 @@ def is_visible_bbox(bbox, camera, K, world_2_camera, depth_map, threshold_visibl
         if result is None:
             continue
         u, v, dist = result
-        print(f"u:{u}, v:{v}, dist:{dist}")
-        print(f"depth_map[v, u]:{depth_map[v][u]}")
-        if dist < depth_map[v][u]:
+        # print(f"u:{u}, v:{v}, dist:{dist}")
+        # print(f"depth_map[v, u]:{depth_map[v][u]}")
+        if dist < depth_map[v][u]+eps:
             visible_count += 1
         
     return visible_count >= threshold_visible
@@ -79,29 +79,24 @@ def main():
     ego_vehicle = carla_util.spawn_Ego_vehicles(client, world, ego_bp, spawn_points)
     
     # === カメラセンサの設定 ===
-    camera_bp = blueprint_library.find('sensor.camera.rgb')
-    camera_bp.set_attribute('image_size_x', str(IM_WIDTH))
-    camera_bp.set_attribute('image_size_y', str(IM_HEIGHT))
-    camera_bp.set_attribute('fov', str(FOV))
-    camera_transform = carla.Transform(carla.Location(x=1.5, z=2.0))
-    camera_queue = Queue()
-    camera = world.spawn_actor(camera_bp, camera_transform, attach_to=ego_vehicle)
-    camera.listen(camera_queue.put)
-    print("Camera sensor is set up.")
+    cameras, camera_image_queues = camera_util.setting_camera(world, blueprint_library, ego_vehicle, IM_WIDTH, IM_HEIGHT, FOV, NUM_CAMERA)
     
     # 深度センサの設定
-    depth_bp = blueprint_library.find('sensor.camera.depth')
-    depth_bp.set_attribute('image_size_x', str(IM_WIDTH))
-    depth_bp.set_attribute('image_size_y', str(IM_HEIGHT))
-    depth_bp.set_attribute('fov', str(FOV))
-    depth_transform = carla.Transform(carla.Location(x=1.5, z=2.0))
-    depth_queue = Queue()
-    depth_camera = world.spawn_actor(depth_bp, depth_transform, attach_to=ego_vehicle)
-    depth_camera.listen(depth_queue.put)
-    print("Depth sensor is set up.")
+    depth_cameras, depth_queues = camera_util.setting_depth_camera(world, blueprint_library, ego_vehicle, IM_WIDTH, IM_HEIGHT, FOV, NUM_CAMERA)
     
     # カメラ行列の計算
     K = camera_util.build_projection_matrix(IM_WIDTH, IM_HEIGHT, FOV)
+    
+    # === 保存用のキューを作成 ===
+    row_image_ques, bbox_image_ques, label_ques = camera_util.create_save_queues(NUM_CAMERA)
+    
+    # === ターゲットオブジェクトの設定 ===
+    target_objects = [
+        carla.CityObjectLabel.Vehicles,
+        carla.CityObjectLabel.Pedestrians,
+        carla.CityObjectLabel.TrafficSigns,
+        carla.CityObjectLabel.TrafficLight,
+    ]
     
     # === シミュレーション開始 ===
     ego_vehicle.set_autopilot(True)
@@ -111,81 +106,77 @@ def main():
         for frame_idx in range(num_frames):
             world.tick() # シミュレーションを進める
 
-            # === 深度画像を取得して距離マップに変換 ===
-            depth_image = depth_queue.get()
-            depth_map = image_to_depth(depth_image)
-            
-            # === カメラ画像を取得 ===
-            camera_image = camera_queue.get()
-            camera_image_array = np.frombuffer(camera_image.raw_data, dtype=np.uint8)
-            camera_image_array = camera_image_array.reshape((camera_image.height, camera_image.width, 4))[:, :, :4]
-
-            world_to_camera = np.array(camera.get_transform().get_inverse_matrix())
-
-            # === カメラの位置と向きを取得 ===
-            camera_transform = camera.get_transform()
-            camera_location = camera_transform.location
-            camera_forward_vector = camera_transform.get_forward_vector()
-
-            # === 深度データとbboxの距離から視認できるbboxを抽出 ===
-            target_objects = [
-                carla.CityObjectLabel.Vehicles,
-                carla.CityObjectLabel.Pedestrians,
-                carla.CityObjectLabel.TrafficSigns,
-                carla.CityObjectLabel.TrafficLight,
-            ]
-            visible_bboxes = list()
-            for target in target_objects:
-                bboxes = world.get_level_bbs(target)
-                for bbox in bboxes:
-                    ray = bbox.location - camera_location
-                    if camera_forward_vector.dot(ray) < 0:
-                        continue
-                    if bbox.location.distance(camera.get_location()) > 150.0:
-                        continue
-                    if is_visible_bbox(bbox, camera, K, world_to_camera, depth_map, eps=0.3):
-                        # print(bbox)
-                        verts = bbox.get_world_vertices(carla.Transform())
-                        points_2d_on_image = []
-                        for vert in verts:
-                            p = camera_util.get_image_point(vert, K, world_to_camera)
-                            if p is not None:
-                                points_2d_on_image.append(p)
-                        yolo_bbox = camera_util.calculate_yolo_bbox(points_2d_on_image, IM_WIDTH, IM_HEIGHT)
-                        if yolo_bbox:
-                            xmin, xmax, ymin, ymax = yolo_bbox
-                            size = (xmax - xmin) * (ymax - ymin)
-                            if size < 100:
-                                continue
-                            visible_bboxes.append([xmin, ymin, xmax, ymax])
-            
-            # === 画像に視認可能なbboxを描画 ===
-            for bbox in visible_bboxes:
-                xmin, ymin, xmax, ymax = bbox
-                xmin = int(xmin)
-                ymin = int(ymin)
-                xmax = int(xmax)
-                ymax = int(ymax)
-                cv2.rectangle(camera_image_array, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-            cv2.imshow('Camera View', camera_image_array)
-            cv2.imshow('Depth View', depth_map.astype(np.uint8))
+            for idx in range(NUM_CAMERA):
+                # === RGBカメラと深度カメラを取得 ===
+                camera = cameras[idx]
+                depth_camera = depth_cameras[idx]
+                camera_queue = camera_image_queues[idx]
+                depth_queue = depth_queues[idx]
+                
+                # === RGB画像と深度画像を取得 ===
+                camera_image = camera_queue.get()
+                depth_image = depth_queue.get()
+                
+                # === RGB画像を変換 ===
+                camera_image_array = np.frombuffer(camera_image.raw_data, dtype=np.uint8)
+                camera_image_array = camera_image_array.reshape((camera_image.height, camera_image.width, 4))[:, :, :4]
+                
+                # === 深度画像を距離マップに変換 ===
+                depth_map = image_to_depth(depth_image)
+                
+                # === カメラの位置と向きを取得 ===
+                camera_transform = camera.get_transform()
+                camera_location = camera_transform.location
+                camera_forward_vector = camera_transform.get_forward_vector()
+                
+                # === カメラのワールド座標系からカメラ座標系への変換行列を取得 ===
+                world_to_camera = np.array(camera.get_transform().get_inverse_matrix())
+                
+                # === 距離マップとbboxの距離から視認可能なbboxを抽出 ===
+                visible_bboxes = list()
+                for target in target_objects:
+                    bboxes = world.get_level_bbs(target)
+                    for bbox in bboxes:
+                        ray = bbox.location - camera_location
+                        if camera_forward_vector.dot(ray) < 0:
+                            continue
+                        if bbox.location.distance(camera.get_location()) > 150.0:
+                            continue
+                        if is_visible_bbox(bbox, camera, K, world_to_camera, depth_map, eps=0.3):
+                            verts = bbox.get_world_vertices(carla.Transform())
+                            points_2d_on_image = []
+                            for vert in verts:
+                                p = camera_util.get_image_point(vert, K, world_to_camera)
+                                if p is not None:
+                                    points_2d_on_image.append(p)
+                            yolo_bbox = camera_util.calculate_yolo_bbox(points_2d_on_image, IM_WIDTH, IM_HEIGHT)
+                            if yolo_bbox:
+                                xmin, xmax, ymin, ymax = yolo_bbox
+                                class_id = target
+                                size = (xmax - xmin) * (ymax - ymin)
+                                if size < SIZE_THRESHOLD:
+                                    continue
+                                visible_bboxes.append([class_id, xmin, ymin, xmax, ymax])
+                
+                # === 画像に視認可能なbboxを描画 ===
+                for bbox in visible_bboxes:
+                    class_id, xmin, ymin, xmax, ymax = bbox
+                    xmin = int(xmin)
+                    ymin = int(ymin)
+                    xmax = int(xmax)
+                    ymax = int(ymax)
+                    cv2.rectangle(camera_image_array, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+                    cv2.putText(camera_image_array, f'{class_id}', (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    
+                # === 画像を表示 ===
+                display_name = f'{camera.attributes["role_name"]} with Bounding Boxes'
+                cv2.imshow(display_name, camera_image_array)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 print("ユーザーによりシミュレーションが停止されました。")
                 break
     finally:
         # アクターの破棄
-        camera.stop()
-        camera.destroy()
-        depth_camera.stop()
-        depth_camera.destroy()
-        ego_vehicle.destroy()
-        for vehicle in vehicles:
-            vehicle.destroy()
-        for pedestrian in pedestrians:
-            pedestrian.destroy()
-        for controller in walker_controllers:
-            controller.stop()
-            controller.destroy()
+        carla_util.cleanup(client, world, vehicles, pedestrians, walker_controllers, cameras, depth_cameras)
         print("シミュレーションが終了しました。")
         cv2.destroyAllWindows()
 if __name__ == '__main__':

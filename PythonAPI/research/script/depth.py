@@ -26,8 +26,8 @@ def project_point(vert, K, w2c):
     # Unreal Engine座標系→OpenCV座標系
     point_camera = [point_camera[1], -point_camera[2], point_camera[0]]
     point_img = np.dot(K, point_camera)
-    u = point_img[0] / point_img[2]
-    v = point_img[1] / point_img[2]
+    u = int(round(point_img[0] / point_img[2]))
+    v = int(round(point_img[1] / point_img[2]))
     if not (0 <= u < IM_WIDTH and 0 <= v < IM_HEIGHT):
         return None
     dist = point_img[2]
@@ -44,8 +44,7 @@ def is_visible_bbox(bbox, camera, K, world_2_camera, depth_map, threshold_visibl
         u, v, dist = result
         print(f"u:{u}, v:{v}, dist:{dist}")
         print(f"depth_map[v, u]:{depth_map[v][u]}")
-        print(abs(dist - depth_map[v][u]))
-        if abs(dist - depth_map[v][u]) < eps:
+        if dist < depth_map[v][u]:
             visible_count += 1
         
     return visible_count >= threshold_visible
@@ -123,29 +122,42 @@ def main():
 
             world_to_camera = np.array(camera.get_transform().get_inverse_matrix())
 
-            # === 深度データとbboxの距離から視認できるbboxを抽出 ===
-            visible_bboxes = []
+            # === カメラの位置と向きを取得 ===
             camera_transform = camera.get_transform()
             camera_location = camera_transform.location
             camera_forward_vector = camera_transform.get_forward_vector()
-            for bbox in world.get_level_bbs(carla.CityObjectLabel.Vehicles):
-                ray = bbox.location - camera_location
-                if camera_forward_vector.dot(ray) < 0:
-                    continue
-                if bbox.location.distance(camera.get_location()) > 50.0:
-                    continue
-                if is_visible_bbox(bbox, camera, K, world_to_camera, depth_map, eps=0.3):
-                    # print(bbox)
-                    verts = bbox.get_world_vertices(carla.Transform())
-                    points_2d_on_image = []
-                    for vert in verts:
-                        p = camera_util.get_image_point(vert, K, world_to_camera)
-                        if p is not None:
-                            points_2d_on_image.append(p)
-                    yolo_bbox = camera_util.calculate_yolo_bbox(points_2d_on_image, IM_WIDTH, IM_HEIGHT)
-                    if yolo_bbox:
-                        xmin, xmax, ymin, ymax = yolo_bbox
-                        visible_bboxes.append([xmin, ymin, xmax, ymax])
+
+            # === 深度データとbboxの距離から視認できるbboxを抽出 ===
+            target_objects = [
+                carla.CityObjectLabel.Vehicles,
+                carla.CityObjectLabel.Pedestrians,
+                carla.CityObjectLabel.TrafficSigns,
+                carla.CityObjectLabel.TrafficLight,
+            ]
+            visible_bboxes = list()
+            for target in target_objects:
+                bboxes = world.get_level_bbs(target)
+                for bbox in bboxes:
+                    ray = bbox.location - camera_location
+                    if camera_forward_vector.dot(ray) < 0:
+                        continue
+                    if bbox.location.distance(camera.get_location()) > 150.0:
+                        continue
+                    if is_visible_bbox(bbox, camera, K, world_to_camera, depth_map, eps=0.3):
+                        # print(bbox)
+                        verts = bbox.get_world_vertices(carla.Transform())
+                        points_2d_on_image = []
+                        for vert in verts:
+                            p = camera_util.get_image_point(vert, K, world_to_camera)
+                            if p is not None:
+                                points_2d_on_image.append(p)
+                        yolo_bbox = camera_util.calculate_yolo_bbox(points_2d_on_image, IM_WIDTH, IM_HEIGHT)
+                        if yolo_bbox:
+                            xmin, xmax, ymin, ymax = yolo_bbox
+                            size = (xmax - xmin) * (ymax - ymin)
+                            if size < 100:
+                                continue
+                            visible_bboxes.append([xmin, ymin, xmax, ymax])
             
             # === 画像に視認可能なbboxを描画 ===
             for bbox in visible_bboxes:

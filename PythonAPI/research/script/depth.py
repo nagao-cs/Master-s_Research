@@ -90,6 +90,14 @@ def main():
     # === 保存用のキューを作成 ===
     row_image_ques, bbox_image_ques, label_ques = camera_util.create_save_queues(NUM_CAMERA)
     
+    # === 保存用のディレクトリ作成 ===
+    os.makedirs(OUTPUT_IMG_DIR, exist_ok=True)
+    image_dir = OUTPUT_IMG_DIR + f"/{MAP}"
+    os.makedirs(image_dir, exist_ok=True)
+    os.makedirs(OUTPUT_LABEL_DIR, exist_ok=True)
+    label_dir = OUTPUT_LABEL_DIR + f"/{MAP}"
+    os.makedirs(label_dir, exist_ok=True)
+    
     # === ターゲットオブジェクトの設定 ===
     target_objects = [
         carla.CityObjectLabel.Vehicles,
@@ -118,8 +126,9 @@ def main():
                 depth_image = depth_queue.get()
                 
                 # === RGB画像を変換 ===
-                camera_image_array = np.frombuffer(camera_image.raw_data, dtype=np.uint8)
-                camera_image_array = camera_image_array.reshape((camera_image.height, camera_image.width, 4))[:, :, :4]
+                original_image = np.frombuffer(camera_image.raw_data, dtype=np.uint8)
+                original_image = original_image.reshape((camera_image.height, camera_image.width, 4))[:, :, :4]
+                bbox_image = original_image.copy()
                 
                 # === 深度画像を距離マップに変換 ===
                 depth_map = image_to_depth(depth_image)
@@ -140,7 +149,7 @@ def main():
                         ray = bbox.location - camera_location
                         if camera_forward_vector.dot(ray) < 0:
                             continue
-                        if bbox.location.distance(camera.get_location()) > 150.0:
+                        if bbox.location.distance(camera.get_location()) > 100.0:
                             continue
                         if is_visible_bbox(bbox, camera, K, world_to_camera, depth_map, eps=0.3):
                             verts = bbox.get_world_vertices(carla.Transform())
@@ -165,17 +174,39 @@ def main():
                     ymin = int(ymin)
                     xmax = int(xmax)
                     ymax = int(ymax)
-                    cv2.rectangle(camera_image_array, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-                    cv2.putText(camera_image_array, f'{class_id}', (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    cv2.rectangle(bbox_image, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+                    cv2.putText(bbox_image, f'{class_id}', (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                     
                 # === 画像を表示 ===
                 display_name = f'{camera.attributes["role_name"]} with Bounding Boxes'
-                cv2.imshow(display_name, camera_image_array)
+                cv2.imshow(display_name, bbox_image)
+                
+                # 元画像、バウンディングボックス画像、ラベルを保存用キューに追加
+                img_save_que = row_image_ques[idx]
+                img_save_que.put(original_image)
+                bbox_save_que = bbox_image_ques[idx]
+                bbox_save_que.put(bbox_image)
+                label_save_que = label_ques[idx]
+                label_save_que.put(visible_bboxes)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 print("ユーザーによりシミュレーションが停止されました。")
                 break
     finally:
-        # アクターの破棄
+        print("シミュレーションが終了しました。")
+        # === 画像を保存 ===
+        print("オリジナル画像を保存中")
+        output_original_dir = OUTPUT_IMG_DIR + f"/{MAP}/original"
+        carla_util.save_images(row_image_ques, cameras, output_original_dir)
+        print("バウンディングボックスを描画した画像を保存中")   
+        output_bbox_dir = OUTPUT_IMG_DIR + f"/{MAP}/bbox"
+        carla_util.save_images(bbox_image_ques, cameras, output_bbox_dir)
+        # === ラベルを保存 ===
+        print("ラベルを保存中")
+        output_label_dir = OUTPUT_LABEL_DIR + f"/{MAP}"
+        carla_util.save_labels(label_ques, cameras, output_label_dir)
+        
+        
+        # === クリーンアップ ===
         carla_util.cleanup(client, world, vehicles, pedestrians, walker_controllers, cameras, depth_cameras)
         print("シミュレーションが終了しました。")
         cv2.destroyAllWindows()

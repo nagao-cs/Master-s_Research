@@ -9,7 +9,7 @@ from utils import carla_util, camera_util
 from utils.config import *
 from queue import Queue
 
-def depth_to_meters(depth_image):
+def image_to_depth(depth_image):
     array = np.frombuffer(depth_image.raw_data, dtype=np.uint8)
     array = np.reshape(array, (depth_image.height, depth_image.width, 4))[:, :, :3]  # B, G, R
     B = array[:, :, 0].astype(np.uint32)
@@ -20,35 +20,34 @@ def depth_to_meters(depth_image):
     depth_in_meters = normalized * 1000.0  # convert to meters
     return depth_in_meters
 
-def project_point(loc, K, w2c):
-    P = np.array([loc.x, loc.y, loc.z, 1.0])
-    camera_coords = w2c.dot(P)
-    if camera_coords[2] <= 0: return None
-    x_c, y_c, z_c = camera_coords[:3]
-    img = K.dot(camera_coords[:3] / z_c)
-    return int(img[0]), int(img[1]), z_c
+def project_point(vert, K, w2c):
+    point = np.array([vert.x, vert.y, vert.z, 1.0])
+    point_camera = np.dot(w2c, point)
+    # Unreal Engine座標系→OpenCV座標系
+    point_camera = [point_camera[1], -point_camera[2], point_camera[0]]
+    point_img = np.dot(K, point_camera)
+    u = point_img[0] / point_img[2]
+    v = point_img[1] / point_img[2]
+    if not (0 <= u < IM_WIDTH and 0 <= v < IM_HEIGHT):
+        return None
+    dist = point_img[2]
+    return (u, v, dist)
 
-def is_visible_bbox(bbox, camera_actor, K, world_2_camera, depth_meters, threshold_visible=1, eps=1.0):
-    verts = bbox.get_world_vertices(carla.Transform())
+def is_visible_bbox(bbox, camera, K, world_2_camera, depth_map, threshold_visible=1, eps=1.0):
+    verts = [vert for vert in bbox.get_world_vertices(carla.Transform())]
     visible_count = 0
 
     for vert in verts:
-        point_3d = np.array([vert.x, vert.y, vert.z, 1.0])
-        camera_coords = world_2_camera @ point_3d
-        if camera_coords[2] <= 0:
+        result = project_point(vert, K, world_2_camera)
+        if result is None:
             continue
-
-        projected = K @ (camera_coords[:3] / camera_coords[2])
-        u, v = int(projected[0]), int(projected[1])
-        z_camera = camera_coords[2]
-
-        if 0 <= u < depth_meters.shape[1] and 0 <= v < depth_meters.shape[0]:
-            depth_value = depth_meters[v, u]
-            # デバッグ用
-            # print(f"u={u}, v={v}, depth_value={depth_value:.2f}, z_camera={z_camera:.2f}")
-            if abs(depth_value - z_camera) < eps:
-                visible_count += 1
-
+        u, v, dist = result
+        print(f"u:{u}, v:{v}, dist:{dist}")
+        print(f"depth_map[v, u]:{depth_map[v][u]}")
+        print(abs(dist - depth_map[v][u]))
+        if abs(dist - depth_map[v][u]) < eps:
+            visible_count += 1
+        
     return visible_count >= threshold_visible
 
 
@@ -113,27 +112,29 @@ def main():
         for frame_idx in range(num_frames):
             world.tick() # シミュレーションを進める
 
+            # === 深度画像を取得して距離マップに変換 ===
             depth_image = depth_queue.get()
-            # print(depth_image.raw_data)
-            depth_gray = depth_to_meters(depth_image)
-            # depth_image.convert(carla.ColorConverter.Depth)
-            # print(depth_image)
+            depth_map = image_to_depth(depth_image)
             
-            world_to_camera = camera.get_transform().get_inverse_matrix()
-
+            # === カメラ画像を取得 ===
             camera_image = camera_queue.get()
             camera_image_array = np.frombuffer(camera_image.raw_data, dtype=np.uint8)
-            camera_image_array = camera_image_array.reshape((camera_image.height, camera_image.width, 4))[:, :, :3]
-            camera_image_array = cv2.cvtColor(camera_image_array, cv2.COLOR_RGB2BGR)
+            camera_image_array = camera_image_array.reshape((camera_image.height, camera_image.width, 4))[:, :, :4]
 
+            world_to_camera = np.array(camera.get_transform().get_inverse_matrix())
+
+            # === 深度データとbboxの距離から視認できるbboxを抽出 ===
             visible_bboxes = []
+            camera_transform = camera.get_transform()
+            camera_location = camera_transform.location
+            camera_forward_vector = camera_transform.get_forward_vector()
             for bbox in world.get_level_bbs(carla.CityObjectLabel.Vehicles):
-                ray = bbox.location - camera.get_location()
-                if camera.get_transform().get_forward_vector().dot(ray) < 0:
+                ray = bbox.location - camera_location
+                if camera_forward_vector.dot(ray) < 0:
                     continue
                 if bbox.location.distance(camera.get_location()) > 50.0:
                     continue
-                if is_visible_bbox(bbox, camera, K, world_to_camera, depth_gray, eps=0.3):
+                if is_visible_bbox(bbox, camera, K, world_to_camera, depth_map, eps=0.3):
                     # print(bbox)
                     verts = bbox.get_world_vertices(carla.Transform())
                     points_2d_on_image = []
@@ -146,6 +147,7 @@ def main():
                         xmin, xmax, ymin, ymax = yolo_bbox
                         visible_bboxes.append([xmin, ymin, xmax, ymax])
             
+            # === 画像に視認可能なbboxを描画 ===
             for bbox in visible_bboxes:
                 xmin, ymin, xmax, ymax = bbox
                 xmin = int(xmin)
@@ -154,7 +156,7 @@ def main():
                 ymax = int(ymax)
                 cv2.rectangle(camera_image_array, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
             cv2.imshow('Camera View', camera_image_array)
-            cv2.imshow('Depth View', depth_gray.astype(np.uint8))
+            cv2.imshow('Depth View', depth_map.astype(np.uint8))
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 print("ユーザーによりシミュレーションが停止されました。")
                 break

@@ -77,11 +77,20 @@ def spawn_Ego_vehicles(client, world, bp, spawn_points):
         
     return ego_vehicle
 
+def show_queue_content(queue, display_name):
+    for i in range(queue.qsize()):
+        image = queue[i]
+        cv2.imshow(display_name, image)
+        cv2.waitKey(1)
+    else:
+        print(f"{display_name} is empty")
+
 def save_images(image_queues, cameras, output_dir):
     for i, camera in enumerate(cameras):
         image_queue = image_queues[i]
         camera_name = camera.attributes['role_name']
-        print(f"Saving images from {camera_name}...")
+        num_images = image_queue.qsize()
+        print(f"Saving {num_images} images from {camera_name}...")
         save_dir = f"{output_dir}/{camera_name}"
         os.makedirs(save_dir, exist_ok=True)
         num_frame = 0
@@ -89,6 +98,7 @@ def save_images(image_queues, cameras, output_dir):
             image = image_queue.get()
             image_path = f"{save_dir}/{num_frame:06d}.png"
             cv2.imwrite(image_path, image)
+            cv2.imshow(camera_name, image)
             num_frame += 1
 
 def save_labels(label_queues, cameras, output_dir):
@@ -108,7 +118,6 @@ def save_labels(label_queues, cameras, output_dir):
                 for label in labels:
                     writer.writerow(label)
             num_frame += 1
-    print("すべてのラベルを保存しました。")
 
 def cleanup(client, world, vehicles, pedestrians, walker_controllers, cameras, depth_cameras):
     print("クリーンアップを開始")

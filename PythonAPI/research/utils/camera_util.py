@@ -8,7 +8,7 @@ from utils.config import IM_WIDTH, IM_HEIGHT, FOV, VALID_DISTANCE, CLASS_MAPPING
 
 def setting_camera(world, bp_library, ego_vehicle, im_width, im_height, fov, num_camera):
     cameras = list()
-    ques = list()
+    queues = [Queue() for _ in range(num_camera)]
     for i in range(num_camera):
         camera_bp = bp_library.find('sensor.camera.rgb')
         camera_bp.set_attribute('image_size_x', str(im_width))
@@ -27,12 +27,11 @@ def setting_camera(world, bp_library, ego_vehicle, im_width, im_height, fov, num
             camera_bp.set_attribute('role_name', f'left_{number}')
             camera_transform = carla.Transform(carla.Location(x=1.5, y=-0.3*(number), z=2.0))
         camera = world.spawn_actor(camera_bp, camera_transform, attach_to=ego_vehicle)
-        q = Queue()
-        camera.listen(q.put)
+        que = queues[i]
+        camera.listen(que.put)
         cameras.append(camera)
-        ques.append(q)
     print(f"{len(cameras)} 台のカメラをスポーン")
-    return cameras, ques
+    return cameras, queues
 
 def setting_depth_camera(world, bp_library, ego_vehicle, im_width, im_height, fov, num_camera):
     depth_cameras = list()

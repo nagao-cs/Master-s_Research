@@ -33,7 +33,7 @@ def project_point(vert, K, w2c):
     dist = point_img[2]
     return (u, v, dist)
 
-def is_visible_bbox(bbox, camera, K, world_2_camera, depth_map, threshold_visible=1, eps=1.0):
+def is_visible_bbox(bbox, camera, K, world_2_camera, depth_map, threshold_visible=2, eps=1.0):
     verts = [vert for vert in bbox.get_world_vertices(carla.Transform())]
     visible_count = 0
 
@@ -88,7 +88,7 @@ def main():
     K = camera_util.build_projection_matrix(IM_WIDTH, IM_HEIGHT, FOV)
     
     # === 保存用のキューを作成 ===
-    row_image_ques, bbox_image_ques, label_ques = camera_util.create_save_queues(NUM_CAMERA)
+    original_image_ques, bbox_image_ques, label_ques = camera_util.create_save_queues(NUM_CAMERA)
     
     # === 保存用のディレクトリ作成 ===
     os.makedirs(OUTPUT_IMG_DIR, exist_ok=True)
@@ -122,12 +122,13 @@ def main():
                 depth_queue = depth_queues[idx]
                 
                 # === RGB画像と深度画像を取得 ===
-                camera_image = camera_queue.get()
+                original_image = camera_queue.get()
                 depth_image = depth_queue.get()
                 
                 # === RGB画像を変換 ===
-                original_image = np.frombuffer(camera_image.raw_data, dtype=np.uint8)
-                original_image = original_image.reshape((camera_image.height, camera_image.width, 4))[:, :, :4]
+                # image_array = np.frombuffer(original_image.raw_data, dtype=np.uint8)
+                # original_image = image_array.reshape((original_image.height, original_image.width, 4))[:, :, :4]
+                original_image = np.reshape(np.copy(original_image.raw_data), (original_image.height, original_image.width, 4))
                 bbox_image = original_image.copy()
                 
                 # === 深度画像を距離マップに変換 ===
@@ -165,14 +166,14 @@ def main():
                                 size = (xmax - xmin) * (ymax - ymin)
                                 if size < SIZE_THRESHOLD:
                                     continue
-                                visible_bboxes.append([class_id, xmin, ymin, xmax, ymax])
+                                visible_bboxes.append([class_id, xmin, xmax, ymin, ymax])
                 
                 # === 画像に視認可能なbboxを描画 ===
                 for bbox in visible_bboxes:
-                    class_id, xmin, ymin, xmax, ymax = bbox
+                    class_id, xmin, xmax, ymin, ymax = bbox
                     xmin = int(xmin)
-                    ymin = int(ymin)
                     xmax = int(xmax)
+                    ymin = int(ymin)
                     ymax = int(ymax)
                     cv2.rectangle(bbox_image, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
                     cv2.putText(bbox_image, f'{class_id}', (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
@@ -182,8 +183,8 @@ def main():
                 cv2.imshow(display_name, bbox_image)
                 
                 # 元画像、バウンディングボックス画像、ラベルを保存用キューに追加
-                img_save_que = row_image_ques[idx]
-                img_save_que.put(original_image)
+                original_image_save_que = original_image_ques[idx]
+                original_image_save_que.put(original_image)
                 bbox_save_que = bbox_image_ques[idx]
                 bbox_save_que.put(bbox_image)
                 label_save_que = label_ques[idx]
@@ -193,10 +194,12 @@ def main():
                 break
     finally:
         print("シミュレーションが終了しました。")
+        # === デバッグ用に画像を表示 ===
+        # carla_util.show_queue_content(original_image_ques[0], "Original Images")
         # === 画像を保存 ===
         print("オリジナル画像を保存中")
         output_original_dir = OUTPUT_IMG_DIR + f"/{MAP}/original"
-        carla_util.save_images(row_image_ques, cameras, output_original_dir)
+        carla_util.save_images(original_image_ques, cameras, output_original_dir)
         print("バウンディングボックスを描画した画像を保存中")   
         output_bbox_dir = OUTPUT_IMG_DIR + f"/{MAP}/bbox"
         carla_util.save_images(bbox_image_ques, cameras, output_bbox_dir)

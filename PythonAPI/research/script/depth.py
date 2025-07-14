@@ -33,7 +33,8 @@ def project_point(vert, K, w2c):
     dist = point_img[2]
     return (u, v, dist)
 
-def is_visible_bbox(bbox, camera, K, world_2_camera, depth_map, threshold_visible=2, eps=1.0):
+def is_visible_bbox(bbox, camera, K, world_2_camera, depth_map, threshold_visible=2):
+    eps = 0.1
     verts = [vert for vert in bbox.get_world_vertices(carla.Transform())]
     visible_count = 0
 
@@ -44,7 +45,7 @@ def is_visible_bbox(bbox, camera, K, world_2_camera, depth_map, threshold_visibl
         u, v, dist = result
         # print(f"u:{u}, v:{v}, dist:{dist}")
         # print(f"depth_map[v, u]:{depth_map[v][u]}")
-        if dist < depth_map[v][u]+eps:
+        if dist < depth_map[v][u] + eps:
             visible_count += 1
         
     return visible_count >= threshold_visible
@@ -126,8 +127,6 @@ def main():
                 depth_image = depth_queue.get()
                 
                 # === RGB画像を変換 ===
-                # image_array = np.frombuffer(original_image.raw_data, dtype=np.uint8)
-                # original_image = image_array.reshape((original_image.height, original_image.width, 4))[:, :, :4]
                 original_image = np.reshape(np.copy(original_image.raw_data), (original_image.height, original_image.width, 4))
                 bbox_image = original_image.copy()
                 
@@ -150,9 +149,10 @@ def main():
                         ray = bbox.location - camera_location
                         if camera_forward_vector.dot(ray) < 0:
                             continue
-                        if bbox.location.distance(camera.get_location()) > 100.0:
+                        dist = bbox.location.distance(camera_location)
+                        if dist > VALID_DISTANCE:
                             continue
-                        if is_visible_bbox(bbox, camera, K, world_to_camera, depth_map, eps=0.3):
+                        if is_visible_bbox(bbox, camera, K, world_to_camera, depth_map, threshold_visible=VALID_NUM_VERTICES):
                             verts = bbox.get_world_vertices(carla.Transform())
                             points_2d_on_image = []
                             for vert in verts:
@@ -166,11 +166,11 @@ def main():
                                 size = (xmax - xmin) * (ymax - ymin)
                                 if size < SIZE_THRESHOLD:
                                     continue
-                                visible_bboxes.append([class_id, xmin, xmax, ymin, ymax])
+                                visible_bboxes.append([class_id, xmin, xmax, ymin, ymax, dist])
                 
                 # === 画像に視認可能なbboxを描画 ===
                 for bbox in visible_bboxes:
-                    class_id, xmin, xmax, ymin, ymax = bbox
+                    class_id, xmin, xmax, ymin, ymax, dist = bbox
                     xmin = int(xmin)
                     xmax = int(xmax)
                     ymin = int(ymin)
@@ -183,12 +183,12 @@ def main():
                 cv2.imshow(display_name, bbox_image)
                 
                 # 元画像、バウンディングボックス画像、ラベルを保存用キューに追加
-                original_image_save_que = original_image_ques[idx]
-                original_image_save_que.put(original_image)
-                bbox_save_que = bbox_image_ques[idx]
-                bbox_save_que.put(bbox_image)
-                label_save_que = label_ques[idx]
-                label_save_que.put(visible_bboxes)
+                # original_image_save_que = original_image_ques[idx]
+                # original_image_save_que.put(original_image)
+                # bbox_save_que = bbox_image_ques[idx]
+                # bbox_save_que.put(bbox_image)
+                # label_save_que = label_ques[idx]
+                # label_save_que.put(visible_bboxes)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 print("ユーザーによりシミュレーションが停止されました。")
                 break

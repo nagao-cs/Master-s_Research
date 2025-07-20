@@ -183,19 +183,17 @@ def main():
                 cv2.imshow(display_name, bbox_image)
                 
                 # 元画像、バウンディングボックス画像、ラベルを保存用キューに追加
-                # original_image_save_que = original_image_ques[idx]
-                # original_image_save_que.put(original_image)
-                # bbox_save_que = bbox_image_ques[idx]
-                # bbox_save_que.put(bbox_image)
-                # label_save_que = label_ques[idx]
-                # label_save_que.put(visible_bboxes)
+                original_image_save_que = original_image_ques[idx]
+                original_image_save_que.put(original_image)
+                bbox_save_que = bbox_image_ques[idx]
+                bbox_save_que.put(bbox_image)
+                label_save_que = label_ques[idx]
+                label_save_que.put(visible_bboxes)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 print("ユーザーによりシミュレーションが停止されました。")
                 break
     finally:
         print("シミュレーションが終了しました。")
-        # === デバッグ用に画像を表示 ===
-        # carla_util.show_queue_content(original_image_ques[0], "Original Images")
         # === 画像を保存 ===
         print("オリジナル画像を保存中")
         output_original_dir = OUTPUT_IMG_DIR + f"/{MAP}/original"

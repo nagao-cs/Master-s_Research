@@ -3,7 +3,7 @@ CARLA_HOST = 'localhost'
 CARLA_PORT = 2000
 TIMEOUT = 10
 
-MAP = "Town01_Opt"
+MAP = "Town10HD_Opt"
 TIME_DURATION = 100 # シミュレーション時間（秒）
 VALID_DISTANCE = 100 # バウンディングボックス検出の最大距離
 VALID_NUM_VERTICES = 2 # バウンディングボックスの頂点数

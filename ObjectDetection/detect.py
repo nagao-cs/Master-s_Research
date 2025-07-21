@@ -1,7 +1,5 @@
 import os
-from PIL import Image
 import cv2
-import csv
 from concurrent.futures import ThreadPoolExecutor
 from Yolov8nDetector import Yolov8nDetector
 COCO_LABELS = [
@@ -26,10 +24,6 @@ if __name__ == "__main__":
     yolov8 = Yolov8nDetector('yolov8n.pt')
     conf_threshold = 0.5
     input_base_dir = "C:\CARLA_Latest\WindowsNoEditor\output\image"
-    output_image_dir = "yolov8_results/images"
-    output_label_dir = "yolov8_results/labels"
-    os.makedirs(output_image_dir, exist_ok=True)
-    os.makedirs(output_label_dir, exist_ok=True)
     map = "Town01_Opt"
     cameras = ["front", "left_1", "right_1"]
     for camera in cameras:
@@ -44,10 +38,9 @@ if __name__ == "__main__":
                 print(f"Could not read image: {image_path}")
                 continue
             bboxes = yolov8.predict(image)
+            index = image_file.split('.')[0]
             yolov8.save_result(
-                image, bboxes,
-                os.path.join(output_image_dir, f"{camera}_{image_file}"),
-                os.path.join(output_label_dir, f"{camera}_{image_file}.csv")
+                image, bboxes, map, camera, index
             )
             print(f"Processed {image_file} for camera {camera}")
     

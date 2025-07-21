@@ -1,4 +1,5 @@
 /AdditionalMaps_0.9.13
+/AdditionalMaps
 /carla-env
 /CarlaUE4
 /Co-Simulation
@@ -19,7 +20,9 @@ __pycache__/
 /ObjectDetection/yolov8_results
 /ObjectDetection/yolov8n.pt
 /ObjectDetection/requirement.txt
+/ObjectDetection/output
 /output
 /scenario_runner-*
 /CHANGELOG
 /README
+/Evaluation/*.pkl

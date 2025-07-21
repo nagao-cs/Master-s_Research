@@ -3,6 +3,7 @@ import cv2
 from concurrent.futures import ThreadPoolExecutor
 from Yolov8nDetector import Yolov8nDetector
 from SSD import SSDDetector
+from FastRCNN import FastRCNNDetector
 COCO_LABELS = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus",
     "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign",
@@ -22,7 +23,7 @@ COCO_LABELS = [
 SIZE_THRESHOLD=100
 
 if __name__ == "__main__":
-    model = SSDDetector()
+    model = FastRCNNDetector()
     conf_threshold = 0.5
     input_base_dir = "C:\CARLA_Latest\WindowsNoEditor\output\image"
     map = "Town01_Opt"

@@ -1,5 +1,9 @@
 from abc import ABC, abstractmethod
 
+class DetectionResult:
+    def __init__(self):
+        pass
+
 class AbstractObjectDetector:
     def __init__(self, model_path: str):
         self.model_path = model_path
@@ -21,3 +25,8 @@ class AbstractObjectDetector:
     @abstractmethod
     def save_result(self, image, bboxes, output_image_path, output_label_path):
         pass
+    
+    def detect(self, image) -> DetectionResult:
+        detections = self.predict(image)
+        return detections
+    

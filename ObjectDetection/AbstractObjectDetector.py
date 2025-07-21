@@ -23,7 +23,7 @@ class AbstractObjectDetector:
         pass
     
     @abstractmethod
-    def save_result(self, image, bboxes, output_image_path, output_label_path):
+    def save_result(self, image_path, bboxes, map, camera, index):
         pass
     
     def detect(self, image) -> DetectionResult:

@@ -22,7 +22,10 @@ class Yolov8nDetector(AbstractObjectDetector):
         if self.model is None:
             print("Model is not loaded")
             return []
-
+        image = cv2.imread(image)
+        if image is None:
+            print(f"Could not read image: {image}")
+            return []
         detections = self.model(image)
         bboxes = list()
         bboxes = detections[0].boxes
@@ -56,15 +59,14 @@ class Yolov8nDetector(AbstractObjectDetector):
             label = bbox['label']
             conf = bbox['confidence']
             
-            # Draw bounding box
             cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
             
-            # Draw label and confidence
             text = f"{label} {conf:.2f}"
             cv2.putText(image, text, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         return image
     
-    def save_result(self, image, bboxes, map, camera, index):
+    def save_result(self, image_path, bboxes, map, camera, index):
+        image  = cv2.imread(image_path)
         # === 保存先のディレクトリを作成 ===
         output_image_dir = f"./output/{map}/images/yolov8n_results/{camera}"
         output_label_dir = f"./output/{map}/labels/yolov8n_results/{camera}"

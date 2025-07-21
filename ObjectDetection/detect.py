@@ -2,6 +2,7 @@ import os
 import cv2
 from concurrent.futures import ThreadPoolExecutor
 from Yolov8nDetector import Yolov8nDetector
+from SSD import SSDDetector
 COCO_LABELS = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus",
     "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign",
@@ -21,7 +22,7 @@ COCO_LABELS = [
 SIZE_THRESHOLD=100
 
 if __name__ == "__main__":
-    yolov8 = Yolov8nDetector('yolov8n.pt')
+    model = SSDDetector()
     conf_threshold = 0.5
     input_base_dir = "C:\CARLA_Latest\WindowsNoEditor\output\image"
     map = "Town01_Opt"
@@ -33,14 +34,13 @@ if __name__ == "__main__":
             continue
         for image_file in os.listdir(input_images_directory):
             image_path = os.path.join(input_images_directory, image_file)
-            image = cv2.imread(image_path)
-            if image is None:
+            if image_path is None:
                 print(f"Could not read image: {image_path}")
                 continue
-            bboxes = yolov8.predict(image)
+            bboxes = model.predict(image_path)
             index = image_file.split('.')[0]
-            yolov8.save_result(
-                image, bboxes, map, camera, index
+            model.save_result(
+                image_path, bboxes, map, camera, index
             )
             print(f"Processed {image_file} for camera {camera}")
     

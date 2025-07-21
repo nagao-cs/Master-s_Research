@@ -26,3 +26,4 @@ __pycache__/
 /CHANGELOG
 /README
 /Evaluation/*.pkl
+/detection_env

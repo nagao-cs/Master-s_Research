@@ -6,13 +6,15 @@ from AbstractObjectDetector import AbstractObjectDetector
 import os
 
 class Yolov8nDetector(AbstractObjectDetector):
-    def __init__(self, model_path):
-        super().__init__(model_path)
+    def __init__(self):
+        self.model = None
+        self.load_model()
         
     def load_model(self):
         try:
-            self.model = YOLO(self.model_path)
-            print(f"YOLOv8n model loaded from {self.model_path}")
+            
+            self.model = YOLO("C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\yolov8n.pt")
+            print(f"YOLOv8n model loaded")
             
         except Exception as e:
             print(f"Error loading YOLOv8n model: {e}")
@@ -68,8 +70,8 @@ class Yolov8nDetector(AbstractObjectDetector):
     def save_result(self, image_path, bboxes, map, camera, index):
         image  = cv2.imread(image_path)
         # === 保存先のディレクトリを作成 ===
-        output_image_dir = f"./output/{map}/images/yolov8n_results/{camera}"
-        output_label_dir = f"./output/{map}/labels/yolov8n_results/{camera}"
+        output_image_dir = f"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection/output/{map}/images/yolov8n_results/{camera}"
+        output_label_dir = f"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection/output/{map}/labels/yolov8n_results/{camera}"
         os.makedirs(output_image_dir, exist_ok=True)
         os.makedirs(output_label_dir, exist_ok=True)
         

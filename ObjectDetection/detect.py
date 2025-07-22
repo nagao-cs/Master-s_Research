@@ -23,7 +23,9 @@ COCO_LABELS = [
 SIZE_THRESHOLD=100
 
 if __name__ == "__main__":
-    model = FastRCNNDetector()
+    # model = FastRCNNDetector()
+    model = Yolov8nDetector()
+    # model = SSDDetector()
     conf_threshold = 0.5
     input_base_dir = "C:\CARLA_Latest\WindowsNoEditor\output\image"
     map = "Town01_Opt"
@@ -45,4 +47,4 @@ if __name__ == "__main__":
             )
             print(f"Processed {image_file} for camera {camera}")
     
-    print("All images processed. Check the 'yolov8_results' directory.")
+    print("All images processed.")

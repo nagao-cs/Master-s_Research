@@ -84,8 +84,8 @@ class FastRCNNDetector(AbstractObjectDetector):
             return
         original_width, original_height = image.shape[1], image.shape[0]
         # === 保存先のディレクトリを作成 ===
-        output_image_dir = f"./output/{map}/images/FastRCNN_results/{camera}"
-        output_label_dir = f"./output/{map}/labels/FastRCNN_results/{camera}"
+        output_image_dir = f"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\output/{map}/images/FastRCNN_results/{camera}"
+        output_label_dir = f"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\output/{map}/labels/FastRCNN_results/{camera}"
         os.makedirs(output_image_dir, exist_ok=True)
         os.makedirs(output_label_dir, exist_ok=True)
         

@@ -1,6 +1,8 @@
 import os 
 import pickle
 
+SIZE_THRESHOLD = 200  # バウンディングボックスの最小サイズ
+
 def iou(box1, box2):
     axmin, axmax, aymin, aymax, _ = box1
     bxmin, bxmax, bymin, bymax, _ = box2
@@ -38,6 +40,7 @@ class Evaluation:
                 cov_od += 0
             else:
                 cov_od += (num_fp+num_fn)/(num_obj)
+            # print(f"Frame {frame}: num_obj={num_obj}, num_fp={num_fp}, num_fn={num_fn}, cov_od={cov_od}")
         return 1-(cov_od/self.dataset.num_frames)
     
 class Dataset:
@@ -49,12 +52,13 @@ class Dataset:
         5: 2,  #bus
         7: 2,  #truck
         9: 9,  #traffic light
-        11: 11, #stop sign
+        # 11: 11, #stop sign
     }   
         
-    def __init__(self, gt_dir, detection_dir, cameras:list):
+    def __init__(self, gt_dir, detection_dir, cameras:list, conf_threshold):
         self.cameras = cameras
         self.gt = self.get_gt(gt_dir)
+        self.conf_threshold = conf_threshold
         self.detections = self.get_detections(detection_dir)
         self.num_frames = len(self.gt)
         
@@ -69,14 +73,18 @@ class Dataset:
                     if not line.strip():
                         continue
                     parts = line.strip().split(',')
-                    class_id = int(parts[0])
+                    # print(f"parts: {parts}")
+                    class_id = self.class_Map.get((int(parts[0])), -1)  # -1（無視するクラス）
+                    if class_id == -1:
+                        continue
                     xmin = int(float(parts[1]))
                     xmax = int(float(parts[2]))
                     ymin = int(float(parts[3]))
                     ymax = int(float(parts[4]))
-                    distance = float(parts[5])
+                    # distance = float(parts[5])
+                    distance = 0.0  # 仮の値、必要に応じて計算する
                     size = (xmax-xmin) * (ymax-ymin)
-                    if size < 100:
+                    if size < SIZE_THRESHOLD:
                         continue
                     if class_id not in frame_gt:
                         frame_gt[class_id] = list()
@@ -117,6 +125,11 @@ class Dataset:
                     ymin = int(float(parts[3]))
                     ymax = int(float(parts[4]))
                     confidence = float(parts[5])
+                    if confidence < self.conf_threshold:
+                        continue
+                    size = (xmax - xmin) * (ymax - ymin)
+                    if size < SIZE_THRESHOLD:
+                        continue
                     if class_id not in frame_detections:
                         frame_detections[class_id] = list()
                     frame_detections[class_id].append((xmin, xmax, ymin, ymax, confidence))
@@ -311,6 +324,7 @@ class Dataset:
         for frame in range(self.num_frames):
             frame_fp = fps[frame]
             gt = self.gt[frame]
+            # print(gt)
             frame_object = dict()
             for class_id, bboxes in frame_fp.items():
                 frame_object[class_id] = bboxes
@@ -324,24 +338,27 @@ class Dataset:
     
 def main():
     map = 'Town10HD_Opt'
+    model = "yolov8n"
+    # model = "SSD"
     gt_dir = f'C:/CARLA_Latest/WindowsNoEditor/output/label/{map}/front'
-    detection_dir = f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/yolov8_results/labels/{map}'
+    detection_dir = f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{map}/labels/{model}_results/'
     num_versions = [1, 2, 3]
+    CONF_THRESHOLD = 0.5
     for num_version in num_versions:
         # データセットを一度だけロードし、キャッシュする
         cameras = os.listdir(detection_dir)[:num_version]
-        cache_file = f'dataset_{map}_{len(cameras)}_cache.pkl'
-        if os.path.exists(cache_file):
-            print(f"Loading dataset from cache: {cache_file}")
-            with open(cache_file, 'rb') as f:
-                dataset = pickle.load(f)
-        else:
-            print("Loading dataset from raw files...")
-            dataset = Dataset(gt_dir, detection_dir, cameras)
-            with open(cache_file, 'wb') as f:
-                pickle.dump(dataset, f)
-            print(f"Dataset cached to {cache_file}")
-        dataset = Dataset(gt_dir, detection_dir, cameras)    
+        # cache_file = f'{model}_{map}_{len(cameras)}_{model}_cache.pkl'
+        # if os.path.exists(cache_file):
+        #     print(f"Loading dataset from cache: {cache_file}")
+        #     with open(cache_file, 'rb') as f:
+        #         dataset = pickle.load(f)
+        # else:
+        #     print("Loading dataset from raw files...")
+        #     dataset = Dataset(gt_dir, detection_dir, cameras, CONF_THRESHOLD)
+        #     with open(cache_file, 'wb') as f:
+        #         pickle.dump(dataset, f)
+        #     print(f"Dataset cached to {cache_file}")
+        dataset = Dataset(gt_dir, detection_dir, cameras, CONF_THRESHOLD)
         eval = Evaluation(dataset)
         print(f"{num_version} version")
         print(f"    {eval.cov_od()}")

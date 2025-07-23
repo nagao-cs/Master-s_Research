@@ -2,7 +2,7 @@ import os
 import pickle
 
 SIZE_THRESHOLD = 200  # バウンディングボックスの最小サイズ
-
+IoU_THRESHOLD = 0.5  # IoUの閾値
 def iou(box1, box2):
     axmin, axmax, aymin, aymax, _ = box1
     bxmin, bxmax, bymin, bymax, _ = box2
@@ -55,11 +55,14 @@ class Dataset:
         # 11: 11, #stop sign
     }   
         
-    def __init__(self, gt_dir, detection_dir, cameras:list, conf_threshold):
+    def __init__(self, gt_dir, models, cameras:list, map, conf_threshold):
         self.cameras = cameras
+        self.map = map
         self.gt = self.get_gt(gt_dir)
+        self.models = models
+        self.numversions = len(models)
         self.conf_threshold = conf_threshold
-        self.detections = self.get_detections(detection_dir)
+        self.detections = self.get_detections()
         self.num_frames = len(self.gt)
         
     def get_gt(self, gt_dir) -> list:
@@ -92,18 +95,20 @@ class Dataset:
                 gt.append(frame_gt)
         return gt
 
-    def get_detections(self, detection_dir) -> dict:
+    def get_detections(self) -> dict:
         all_detections = dict()
-        for camera in self.cameras:
-            camera_detection_dir = os.path.join(detection_dir, camera)
-            detections = self.get_camera_detections(camera_detection_dir)
+        for i in range(self.numversions):
+            model = self.models[i]
+            camera = self.cameras[i]
+            detection_dir = f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{self.map}/labels/{model}_results/{camera}'
+            detections = self.get_camera_detections(detection_dir)
             all_detections[camera] = detections
         return all_detections
     
-    def get_camera_detections(self, camera_detection_dir) -> list:
+    def get_camera_detections(self, detection_dir) -> list:
         detections = list()
-        for filename in os.listdir(camera_detection_dir):
-            filepath = os.path.join(camera_detection_dir, filename)
+        for filename in os.listdir(detection_dir):
+            filepath = os.path.join(detection_dir, filename)
             with open(filepath, 'r') as f:
                 lines = f.readlines()
                 frame_detections = dict()
@@ -114,11 +119,11 @@ class Dataset:
                     class_id = self.class_Map.get(int(parts[0]), -1)  #-1（無視するクラス）
                     if class_id == -1:
                         continue
-                    if camera_detection_dir.endswith('front'):
+                    if detection_dir.endswith('front'):
                         offset = 0
-                    elif camera_detection_dir.endswith('left_1'):
+                    elif detection_dir.endswith('left_1'):
                         offset = -22
-                    elif camera_detection_dir.endswith('right_1'):
+                    elif detection_dir.endswith('right_1'):
                         offset = 22
                     xmin = int(float(parts[1])) + offset
                     xmax = int(float(parts[2])) + offset
@@ -149,7 +154,7 @@ class Dataset:
                     for bbox in bboxes:
                         matched = False
                         for other_bbox in frame_affirmative[class_id]:
-                            if iou(bbox, other_bbox) > 0.5:
+                            if iou(bbox, other_bbox) > IoU_THRESHOLD:
                                 matched = True
                                 break
                         if not matched:
@@ -176,7 +181,7 @@ class Dataset:
                         mathced = False
                         other_bboxes = self.detections[camera][i].get(class_id, [])
                         for other_bbox in other_bboxes:
-                            if iou(base_bbox, other_bbox) > 0.5:
+                            if iou(base_bbox, other_bbox) > IoU_THRESHOLD:
                                 mathced = True
                                 break
                         if not mathced:
@@ -206,7 +211,7 @@ class Dataset:
                         matched = False
                         other_bboxes = other_camera_fns.get(class_id, [])
                         for other_bbox in other_bboxes:
-                            if iou(bbox, other_bbox) > 0.5:
+                            if iou(bbox, other_bbox) > IoU_THRESHOLD:
                                 matched = True
                                 break
                         if not matched:
@@ -233,7 +238,7 @@ class Dataset:
                     for bbox in bboxes:
                         matched = False
                         for other_bbox in frame_fp[class_id]:
-                            if iou(bbox, other_bbox) > 0.5:
+                            if iou(bbox, other_bbox) > IoU_THRESHOLD:
                                 matched = True
                                 break
                         if not matched:
@@ -260,7 +265,7 @@ class Dataset:
                 for bbox in bboxes:
                     matched = False
                     for gt_bbox in frame_gt[class_id]:
-                        if iou(bbox, gt_bbox) > 0.5:
+                        if iou(bbox, gt_bbox) > IoU_THRESHOLD:
                             matched = True
                             break
                     if not matched:
@@ -285,7 +290,7 @@ class Dataset:
                         matched = False
                         other_bboxes = other_camera_fns.get(class_id, [])
                         for other_bbox in other_bboxes:
-                            if iou(bbox, other_bbox) > 0.5:
+                            if iou(bbox, other_bbox) > IoU_THRESHOLD:
                                 matched = True
                                 break
                         if not matched:
@@ -309,7 +314,7 @@ class Dataset:
                 for gt_bbox in bboxes:
                     matched = False
                     for bbox in frame_detections[class_id]:
-                        if iou(gt_bbox, bbox) > 0.5:
+                        if iou(gt_bbox, bbox) > IoU_THRESHOLD:
                             matched = True
                             break
                     if not matched:
@@ -335,33 +340,37 @@ class Dataset:
             total_objects.append(frame_object)
         return total_objects
             
-    
+
+
+
 def main():
+    # map = 'Town01_Opt'
+    # map = 'Town05_Opt'
     map = 'Town10HD_Opt'
-    model = "yolov8n"
+    # model = "yolov8n"
     # model = "SSD"
     gt_dir = f'C:/CARLA_Latest/WindowsNoEditor/output/label/{map}/front'
-    detection_dir = f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{map}/labels/{model}_results/'
-    num_versions = [1, 2, 3]
+    # detection_dir = f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{map}/labels/{model}_results/'
     CONF_THRESHOLD = 0.5
-    for num_version in num_versions:
-        # データセットを一度だけロードし、キャッシュする
-        cameras = os.listdir(detection_dir)[:num_version]
-        # cache_file = f'{model}_{map}_{len(cameras)}_{model}_cache.pkl'
-        # if os.path.exists(cache_file):
-        #     print(f"Loading dataset from cache: {cache_file}")
-        #     with open(cache_file, 'rb') as f:
-        #         dataset = pickle.load(f)
-        # else:
-        #     print("Loading dataset from raw files...")
-        #     dataset = Dataset(gt_dir, detection_dir, cameras, CONF_THRESHOLD)
-        #     with open(cache_file, 'wb') as f:
-        #         pickle.dump(dataset, f)
-        #     print(f"Dataset cached to {cache_file}")
-        dataset = Dataset(gt_dir, detection_dir, cameras, CONF_THRESHOLD)
-        eval = Evaluation(dataset)
-        print(f"{num_version} version")
-        print(f"    {eval.cov_od()}")
+    models = ["yolov8n", "SSD", "yolov8n"]
+    cameras = ["front", "left_1", "right_1"]
+    print(f"Evaluating {models} on {map} with confidence threshold {CONF_THRESHOLD}")
+    # データセットを一度だけロードし、キャッシュする
+    # cache_file = f'{model}_{map}_{len(cameras)}_{model}_cache.pkl'
+    # if os.path.exists(cache_file):
+    #     print(f"Loading dataset from cache: {cache_file}")
+    #     with open(cache_file, 'rb') as f:
+    #         dataset = pickle.load(f)
+    # else:
+    #     print("Loading dataset from raw files...")
+    #     dataset = Dataset(gt_dir, detection_dir, cameras, CONF_THRESHOLD)
+    #     with open(cache_file, 'wb') as f:
+    #         pickle.dump(dataset, f)
+    #     print(f"Dataset cached to {cache_file}")
+    dataset = Dataset(gt_dir, models, cameras, map, CONF_THRESHOLD)
+    eval = Evaluation(dataset)
+    print(f"{len(models)} version")
+    print(f"    {eval.cov_od()}")
     
 if __name__ == "__main__":
     main()

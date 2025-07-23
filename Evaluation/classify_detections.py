@@ -102,7 +102,7 @@ class Dataset:
             camera = self.cameras[i]
             detection_dir = f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{self.map}/labels/{model}_results/{camera}'
             detections = self.get_camera_detections(detection_dir)
-            all_detections[camera] = detections
+            all_detections[model+camera] = detections
         return all_detections
     
     def get_camera_detections(self, detection_dir) -> list:
@@ -197,9 +197,10 @@ class Dataset:
     
     def common_false_positives(self) -> list:
         common_fp = list()
-        for i in range(self.num_frames):
+        for frame in range(self.num_frames):
             frame_fp = dict()
-            camera_fps = [self.camera_false_positives(camera, i) for camera in self.cameras]
+            # camera_fps = [self.camera_false_positives(camera, i) for camera in self.cameras]
+            camera_fps = [self.camera_false_positives(model, camera, frame) for model, camera in zip(self.models, self.cameras)]
             if min(len(camera_fp) for camera_fp in camera_fps) == 0:
                 common_fp.append(frame_fp)
                 continue
@@ -228,9 +229,12 @@ class Dataset:
         affirmative_fps = list()
         for frame in range(self.num_frames):
             frame_fp = dict()
-            camera_fps = [self.camera_false_positives(camera, frame) for camera in self.cameras]
-            for i in range(len(self.cameras)):
+            # camera_fps = [self.camera_false_positives(camera, frame) for camera in self.cameras]
+            camera_fps = [self.camera_false_positives(model, camera, frame) for model, camera in zip(self.models, self.cameras)]
+            for i in range(self.numversions):
                 buffer = dict()
+                camera = self.cameras[i]
+                model = self.models[i]
                 for class_id, bboxes in camera_fps[i].items():
                     if class_id not in frame_fp:
                         buffer[class_id] = bboxes
@@ -254,8 +258,8 @@ class Dataset:
         
         return affirmative_fps
     
-    def camera_false_positives(self, camera, frame) -> dict:
-        frame_detections = self.detections[camera][frame]
+    def camera_false_positives(self, model, camera, frame) -> dict:
+        frame_detections = self.detections[model+camera][frame]
         frame_gt = self.gt[frame]
         frame_fp = dict()
         for class_id, bboxes in frame_detections.items():
@@ -276,9 +280,10 @@ class Dataset:
     
     def common_false_negatives(self) -> list:
         common_fn = list()
-        for i in range(self.num_frames):
+        for frame in range(self.num_frames):
             frame_fn = dict()
-            camera_fps = [self.camera_false_negatives(camera, i) for camera in self.cameras]
+            # camera_fps = [self.camera_false_negatives(camera, i) for camera in self.cameras]
+            camera_fps = [self.camera_false_negatives(model, camera, frame) for model, camera in zip(self.models, self.cameras)]
             if min(len(camera_fp) for camera_fp in camera_fps) == 0:
                 common_fn.append(frame_fn)
                 continue
@@ -303,8 +308,8 @@ class Dataset:
             common_fn.append(frame_fn)
         return common_fn
     
-    def camera_false_negatives(self, camera, frame) -> dict:
-        frame_detections = self.detections[camera][frame]
+    def camera_false_negatives(self, model, camera, frame) -> dict:
+        frame_detections = self.detections[model+camera][frame]
         frame_gt = self.gt[frame]
         frame_fn = dict()
         for class_id, bboxes in frame_gt.items():
@@ -339,38 +344,39 @@ class Dataset:
                 frame_object[class_id].extend(bboxes)
             total_objects.append(frame_object)
         return total_objects
-            
-
-
 
 def main():
     # map = 'Town01_Opt'
     # map = 'Town05_Opt'
     map = 'Town10HD_Opt'
-    # model = "yolov8n"
-    # model = "SSD"
     gt_dir = f'C:/CARLA_Latest/WindowsNoEditor/output/label/{map}/front'
     # detection_dir = f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{map}/labels/{model}_results/'
-    CONF_THRESHOLD = 0.5
-    models = ["yolov8n", "SSD", "yolov8n"]
+    CONF_THRESHOLD = 0.25
+    # models = ["yolov8n", "yolov5n", "SSD"]
+    # models = ["yolov8n", "yolov8n", "yolov8n"]
+    # models = ["yolov5n", "yolov5n", "yolov5n"]
+    models = ["SSD", "SSD", "SSD"]
     cameras = ["front", "left_1", "right_1"]
-    print(f"Evaluating {models} on {map} with confidence threshold {CONF_THRESHOLD}")
-    # データセットを一度だけロードし、キャッシュする
-    # cache_file = f'{model}_{map}_{len(cameras)}_{model}_cache.pkl'
-    # if os.path.exists(cache_file):
-    #     print(f"Loading dataset from cache: {cache_file}")
-    #     with open(cache_file, 'rb') as f:
-    #         dataset = pickle.load(f)
-    # else:
-    #     print("Loading dataset from raw files...")
-    #     dataset = Dataset(gt_dir, detection_dir, cameras, CONF_THRESHOLD)
-    #     with open(cache_file, 'wb') as f:
-    #         pickle.dump(dataset, f)
-    #     print(f"Dataset cached to {cache_file}")
-    dataset = Dataset(gt_dir, models, cameras, map, CONF_THRESHOLD)
-    eval = Evaluation(dataset)
-    print(f"{len(models)} version")
-    print(f"    {eval.cov_od()}")
+    # cameras = ["front", "front", "front"]
+    for version in range(3):
+        usemodels, usecameras = models[:version+1], cameras[:version+1]
+        print(f"Evaluating ({usemodels},{usecameras}) on {map} with confidence threshold {CONF_THRESHOLD}")
+        # データセットを一度だけロードし、キャッシュする
+        # cache_file = f'{model}_{map}_{len(usecameras)}_{model}_cache.pkl'
+        # if os.path.exists(cache_file):
+        #     print(f"Loading dataset from cache: {cache_file}")
+        #     with open(cache_file, 'rb') as f:
+        #         dataset = pickle.load(f)
+        # else:
+        #     print("Loading dataset from raw files...")
+        #     dataset = Dataset(gt_dir, detection_dir, usecameras, CONF_THRESHOLD)
+        #     with open(cache_file, 'wb') as f:
+        #         pickle.dump(dataset, f)
+        #     print(f"Dataset cached to {cache_file}")
+        dataset = Dataset(gt_dir, usemodels, usecameras, map, CONF_THRESHOLD)
+        eval = Evaluation(dataset)
+        print(f"{version+1} version")
+        print(f"    {eval.cov_od()}")
     
 if __name__ == "__main__":
     main()

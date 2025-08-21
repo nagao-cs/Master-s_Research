@@ -46,7 +46,7 @@ class FastRCNNDetector(AbstractObjectDetector):
         
         output = list()
         for i in range(num_detections):
-            if scores[i] > 0.5:
+            if scores[i] > 0.25:
                 ymin, xmin, ymax, xmax = bboxes[i]
                 class_id = classes[i]
                 conf = scores[i]

@@ -1,9 +1,12 @@
 import os
 import cv2
 from concurrent.futures import ThreadPoolExecutor
-from Yolov8nDetector import Yolov8nDetector
-from SSD import SSDDetector
-from FastRCNN import FastRCNNDetector
+from ObjectDetection.models.Yolov8nDetector import Yolov8nDetector
+from ObjectDetection.models.Yolov11 import Yolo11nDetector
+from .models.SSD import SSDDetector
+from .models.FastRCNN import FastRCNNDetector
+from .models.Yolov5 import Yolov5nDetector
+from .models.mobilenet import MobilenetDetector
 COCO_LABELS = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus",
     "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign",
@@ -24,12 +27,17 @@ SIZE_THRESHOLD=100
 
 if __name__ == "__main__":
     # model = FastRCNNDetector()
-    model = Yolov8nDetector()
-    # model = SSDDetector()
+    # model = Yolo11nDetector()
+    # model = Yolov8nDetector()
+    model = SSDDetector()
+    # model = Yolov5nDetector()
+    # model = MobilenetDetector()
     conf_threshold = 0.5
     input_base_dir = "C:\CARLA_Latest\WindowsNoEditor\output\image"
     map = "Town01_Opt"
     cameras = ["front", "left_1", "right_1"]
+    import time
+    start = time.time()
     for camera in cameras:
         input_images_directory = os.path.join(input_base_dir, map, "original", camera)
         if not os.path.exists(input_images_directory):
@@ -45,6 +53,7 @@ if __name__ == "__main__":
             model.save_result(
                 image_path, bboxes, map, camera, index
             )
-            print(f"Processed {image_file} for camera {camera}")
-    
+            # print(f"Processed {image_file} for camera {camera}")
+    end = time.time()
+    print(f"total object detection time: {end - start:.2f} seconds")
     print("All images processed.")

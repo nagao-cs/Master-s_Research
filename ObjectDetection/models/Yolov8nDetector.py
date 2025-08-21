@@ -12,7 +12,6 @@ class Yolov8nDetector(AbstractObjectDetector):
         
     def load_model(self):
         try:
-            
             self.model = YOLO("C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\yolov8n.pt")
             print(f"YOLOv8n model loaded")
             

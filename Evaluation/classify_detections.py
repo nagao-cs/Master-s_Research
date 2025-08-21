@@ -1,6 +1,8 @@
 import os 
 import pickle
 
+SIZE_THRESHOLD = 200  # バウンディングボックスの最小サイズ
+IoU_THRESHOLD = 0.5  # IoUの閾値
 def iou(box1, box2):
     axmin, axmax, aymin, aymax, _ = box1
     bxmin, bxmax, bymin, bymax, _ = box2
@@ -38,6 +40,7 @@ class Evaluation:
                 cov_od += 0
             else:
                 cov_od += (num_fp+num_fn)/(num_obj)
+            # print(f"Frame {frame}: num_obj={num_obj}, num_fp={num_fp}, num_fn={num_fn}, cov_od={cov_od}")
         return 1-(cov_od/self.dataset.num_frames)
     
 class Dataset:
@@ -49,13 +52,17 @@ class Dataset:
         5: 2,  #bus
         7: 2,  #truck
         9: 9,  #traffic light
-        11: 11, #stop sign
+        # 11: 11, #stop sign
     }   
         
-    def __init__(self, gt_dir, detection_dir, cameras:list):
+    def __init__(self, gt_dir, models, cameras:list, map, conf_threshold):
         self.cameras = cameras
+        self.map = map
         self.gt = self.get_gt(gt_dir)
-        self.detections = self.get_detections(detection_dir)
+        self.models = models
+        self.numversions = len(models)
+        self.conf_threshold = conf_threshold
+        self.detections = self.get_detections()
         self.num_frames = len(self.gt)
         
     def get_gt(self, gt_dir) -> list:
@@ -69,14 +76,18 @@ class Dataset:
                     if not line.strip():
                         continue
                     parts = line.strip().split(',')
-                    class_id = int(parts[0])
+                    # print(f"parts: {parts}")
+                    class_id = self.class_Map.get((int(parts[0])), -1)  # -1（無視するクラス）
+                    if class_id == -1:
+                        continue
                     xmin = int(float(parts[1]))
                     xmax = int(float(parts[2]))
                     ymin = int(float(parts[3]))
                     ymax = int(float(parts[4]))
-                    distance = float(parts[5])
+                    # distance = float(parts[5])
+                    distance = 0.0  # 仮の値、必要に応じて計算する
                     size = (xmax-xmin) * (ymax-ymin)
-                    if size < 100:
+                    if size < SIZE_THRESHOLD:
                         continue
                     if class_id not in frame_gt:
                         frame_gt[class_id] = list()
@@ -84,18 +95,20 @@ class Dataset:
                 gt.append(frame_gt)
         return gt
 
-    def get_detections(self, detection_dir) -> dict:
+    def get_detections(self) -> dict:
         all_detections = dict()
-        for camera in self.cameras:
-            camera_detection_dir = os.path.join(detection_dir, camera)
-            detections = self.get_camera_detections(camera_detection_dir)
-            all_detections[camera] = detections
+        for i in range(self.numversions):
+            model = self.models[i]
+            camera = self.cameras[i]
+            detection_dir = f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{self.map}/labels/{model}_results/{camera}'
+            detections = self.get_camera_detections(detection_dir)
+            all_detections[model+camera] = detections
         return all_detections
     
-    def get_camera_detections(self, camera_detection_dir) -> list:
+    def get_camera_detections(self, detection_dir) -> list:
         detections = list()
-        for filename in os.listdir(camera_detection_dir):
-            filepath = os.path.join(camera_detection_dir, filename)
+        for filename in os.listdir(detection_dir):
+            filepath = os.path.join(detection_dir, filename)
             with open(filepath, 'r') as f:
                 lines = f.readlines()
                 frame_detections = dict()
@@ -106,17 +119,22 @@ class Dataset:
                     class_id = self.class_Map.get(int(parts[0]), -1)  #-1（無視するクラス）
                     if class_id == -1:
                         continue
-                    if camera_detection_dir.endswith('front'):
+                    if detection_dir.endswith('front'):
                         offset = 0
-                    elif camera_detection_dir.endswith('left_1'):
+                    elif detection_dir.endswith('left_1'):
                         offset = -22
-                    elif camera_detection_dir.endswith('right_1'):
+                    elif detection_dir.endswith('right_1'):
                         offset = 22
                     xmin = int(float(parts[1])) + offset
                     xmax = int(float(parts[2])) + offset
                     ymin = int(float(parts[3]))
                     ymax = int(float(parts[4]))
                     confidence = float(parts[5])
+                    if confidence < self.conf_threshold:
+                        continue
+                    size = (xmax - xmin) * (ymax - ymin)
+                    if size < SIZE_THRESHOLD:
+                        continue
                     if class_id not in frame_detections:
                         frame_detections[class_id] = list()
                     frame_detections[class_id].append((xmin, xmax, ymin, ymax, confidence))
@@ -136,7 +154,7 @@ class Dataset:
                     for bbox in bboxes:
                         matched = False
                         for other_bbox in frame_affirmative[class_id]:
-                            if iou(bbox, other_bbox) > 0.5:
+                            if iou(bbox, other_bbox) > IoU_THRESHOLD:
                                 matched = True
                                 break
                         if not matched:
@@ -163,7 +181,7 @@ class Dataset:
                         mathced = False
                         other_bboxes = self.detections[camera][i].get(class_id, [])
                         for other_bbox in other_bboxes:
-                            if iou(base_bbox, other_bbox) > 0.5:
+                            if iou(base_bbox, other_bbox) > IoU_THRESHOLD:
                                 mathced = True
                                 break
                         if not mathced:
@@ -179,9 +197,10 @@ class Dataset:
     
     def common_false_positives(self) -> list:
         common_fp = list()
-        for i in range(self.num_frames):
+        for frame in range(self.num_frames):
             frame_fp = dict()
-            camera_fps = [self.camera_false_positives(camera, i) for camera in self.cameras]
+            # camera_fps = [self.camera_false_positives(camera, i) for camera in self.cameras]
+            camera_fps = [self.camera_false_positives(model, camera, frame) for model, camera in zip(self.models, self.cameras)]
             if min(len(camera_fp) for camera_fp in camera_fps) == 0:
                 common_fp.append(frame_fp)
                 continue
@@ -193,7 +212,7 @@ class Dataset:
                         matched = False
                         other_bboxes = other_camera_fns.get(class_id, [])
                         for other_bbox in other_bboxes:
-                            if iou(bbox, other_bbox) > 0.5:
+                            if iou(bbox, other_bbox) > IoU_THRESHOLD:
                                 matched = True
                                 break
                         if not matched:
@@ -210,9 +229,12 @@ class Dataset:
         affirmative_fps = list()
         for frame in range(self.num_frames):
             frame_fp = dict()
-            camera_fps = [self.camera_false_positives(camera, frame) for camera in self.cameras]
-            for i in range(len(self.cameras)):
+            # camera_fps = [self.camera_false_positives(camera, frame) for camera in self.cameras]
+            camera_fps = [self.camera_false_positives(model, camera, frame) for model, camera in zip(self.models, self.cameras)]
+            for i in range(self.numversions):
                 buffer = dict()
+                camera = self.cameras[i]
+                model = self.models[i]
                 for class_id, bboxes in camera_fps[i].items():
                     if class_id not in frame_fp:
                         buffer[class_id] = bboxes
@@ -220,7 +242,7 @@ class Dataset:
                     for bbox in bboxes:
                         matched = False
                         for other_bbox in frame_fp[class_id]:
-                            if iou(bbox, other_bbox) > 0.5:
+                            if iou(bbox, other_bbox) > IoU_THRESHOLD:
                                 matched = True
                                 break
                         if not matched:
@@ -236,8 +258,8 @@ class Dataset:
         
         return affirmative_fps
     
-    def camera_false_positives(self, camera, frame) -> dict:
-        frame_detections = self.detections[camera][frame]
+    def camera_false_positives(self, model, camera, frame) -> dict:
+        frame_detections = self.detections[model+camera][frame]
         frame_gt = self.gt[frame]
         frame_fp = dict()
         for class_id, bboxes in frame_detections.items():
@@ -247,7 +269,7 @@ class Dataset:
                 for bbox in bboxes:
                     matched = False
                     for gt_bbox in frame_gt[class_id]:
-                        if iou(bbox, gt_bbox) > 0.5:
+                        if iou(bbox, gt_bbox) > IoU_THRESHOLD:
                             matched = True
                             break
                     if not matched:
@@ -258,9 +280,10 @@ class Dataset:
     
     def common_false_negatives(self) -> list:
         common_fn = list()
-        for i in range(self.num_frames):
+        for frame in range(self.num_frames):
             frame_fn = dict()
-            camera_fps = [self.camera_false_negatives(camera, i) for camera in self.cameras]
+            # camera_fps = [self.camera_false_negatives(camera, i) for camera in self.cameras]
+            camera_fps = [self.camera_false_negatives(model, camera, frame) for model, camera in zip(self.models, self.cameras)]
             if min(len(camera_fp) for camera_fp in camera_fps) == 0:
                 common_fn.append(frame_fn)
                 continue
@@ -272,7 +295,7 @@ class Dataset:
                         matched = False
                         other_bboxes = other_camera_fns.get(class_id, [])
                         for other_bbox in other_bboxes:
-                            if iou(bbox, other_bbox) > 0.5:
+                            if iou(bbox, other_bbox) > IoU_THRESHOLD:
                                 matched = True
                                 break
                         if not matched:
@@ -285,8 +308,8 @@ class Dataset:
             common_fn.append(frame_fn)
         return common_fn
     
-    def camera_false_negatives(self, camera, frame) -> dict:
-        frame_detections = self.detections[camera][frame]
+    def camera_false_negatives(self, model, camera, frame) -> dict:
+        frame_detections = self.detections[model+camera][frame]
         frame_gt = self.gt[frame]
         frame_fn = dict()
         for class_id, bboxes in frame_gt.items():
@@ -296,7 +319,7 @@ class Dataset:
                 for gt_bbox in bboxes:
                     matched = False
                     for bbox in frame_detections[class_id]:
-                        if iou(gt_bbox, bbox) > 0.5:
+                        if iou(gt_bbox, bbox) > IoU_THRESHOLD:
                             matched = True
                             break
                     if not matched:
@@ -311,6 +334,7 @@ class Dataset:
         for frame in range(self.num_frames):
             frame_fp = fps[frame]
             gt = self.gt[frame]
+            # print(gt)
             frame_object = dict()
             for class_id, bboxes in frame_fp.items():
                 frame_object[class_id] = bboxes
@@ -320,30 +344,38 @@ class Dataset:
                 frame_object[class_id].extend(bboxes)
             total_objects.append(frame_object)
         return total_objects
-            
-    
+
 def main():
+    # map = 'Town01_Opt'
+    # map = 'Town05_Opt'
     map = 'Town10HD_Opt'
     gt_dir = f'C:/CARLA_Latest/WindowsNoEditor/output/label/{map}/front'
-    detection_dir = f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/yolov8_results/labels/{map}'
-    num_versions = [1, 2, 3]
-    for num_version in num_versions:
+    # detection_dir = f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{map}/labels/{model}_results/'
+    CONF_THRESHOLD = 0.25
+    # models = ["yolov8n", "yolov5n", "SSD"]
+    # models = ["yolov8n", "yolov8n", "yolov8n"]
+    # models = ["yolov5n", "yolov5n", "yolov5n"]
+    models = ["SSD", "SSD", "SSD"]
+    cameras = ["front", "left_1", "right_1"]
+    # cameras = ["front", "front", "front"]
+    for version in range(3):
+        usemodels, usecameras = models[:version+1], cameras[:version+1]
+        print(f"Evaluating ({usemodels},{usecameras}) on {map} with confidence threshold {CONF_THRESHOLD}")
         # データセットを一度だけロードし、キャッシュする
-        cameras = os.listdir(detection_dir)[:num_version]
-        cache_file = f'dataset_{map}_{len(cameras)}_cache.pkl'
-        if os.path.exists(cache_file):
-            print(f"Loading dataset from cache: {cache_file}")
-            with open(cache_file, 'rb') as f:
-                dataset = pickle.load(f)
-        else:
-            print("Loading dataset from raw files...")
-            dataset = Dataset(gt_dir, detection_dir, cameras)
-            with open(cache_file, 'wb') as f:
-                pickle.dump(dataset, f)
-            print(f"Dataset cached to {cache_file}")
-        dataset = Dataset(gt_dir, detection_dir, cameras)    
+        # cache_file = f'{model}_{map}_{len(usecameras)}_{model}_cache.pkl'
+        # if os.path.exists(cache_file):
+        #     print(f"Loading dataset from cache: {cache_file}")
+        #     with open(cache_file, 'rb') as f:
+        #         dataset = pickle.load(f)
+        # else:
+        #     print("Loading dataset from raw files...")
+        #     dataset = Dataset(gt_dir, detection_dir, usecameras, CONF_THRESHOLD)
+        #     with open(cache_file, 'wb') as f:
+        #         pickle.dump(dataset, f)
+        #     print(f"Dataset cached to {cache_file}")
+        dataset = Dataset(gt_dir, usemodels, usecameras, map, CONF_THRESHOLD)
         eval = Evaluation(dataset)
-        print(f"{num_version} version")
+        print(f"{version+1} version")
         print(f"    {eval.cov_od()}")
     
 if __name__ == "__main__":

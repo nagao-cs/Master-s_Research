@@ -2,7 +2,7 @@ from ultralytics import YOLO
 import cv2
 import numpy as np
 import csv
-from AbstractObjectDetector import AbstractObjectDetector
+from models.AbstractObjectDetector import AbstractObjectDetector
 import os
 
 class Yolov8nDetector(AbstractObjectDetector):

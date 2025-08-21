@@ -1,12 +1,14 @@
 import os
 import cv2
 from concurrent.futures import ThreadPoolExecutor
-from ObjectDetection.models.Yolov8nDetector import Yolov8nDetector
-from ObjectDetection.models.Yolov11 import Yolo11nDetector
-from .models.SSD import SSDDetector
-from .models.FastRCNN import FastRCNNDetector
-from .models.Yolov5 import Yolov5nDetector
-from .models.mobilenet import MobilenetDetector
+# from models.Yolov8nDetector import Yolov8nDetector
+# from models.Yolov11 import Yolo11nDetector
+# from models.SSD import SSDDetector
+# from models.FastRCNN import FastRCNNDetector
+# from models.Yolov5 import Yolov5nDetector
+# from models.mobilenet import MobilenetDetector
+from models.DETR import DETRDetector
+
 COCO_LABELS = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus",
     "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign",
@@ -29,9 +31,10 @@ if __name__ == "__main__":
     # model = FastRCNNDetector()
     # model = Yolo11nDetector()
     # model = Yolov8nDetector()
-    model = SSDDetector()
+    # model = SSDDetector()
     # model = Yolov5nDetector()
     # model = MobilenetDetector()
+    model = DETRDetector()
     conf_threshold = 0.5
     input_base_dir = "C:\CARLA_Latest\WindowsNoEditor\output\image"
     map = "Town01_Opt"

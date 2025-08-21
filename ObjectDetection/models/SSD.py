@@ -1,7 +1,7 @@
 import tensorflow_hub as hub
 import cv2
 import numpy as np
-from AbstractObjectDetector import AbstractObjectDetector
+from models.AbstractObjectDetector import AbstractObjectDetector
 import os
 import csv
 import tensorflow as tf

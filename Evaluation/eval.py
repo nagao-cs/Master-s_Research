@@ -1,14 +1,16 @@
-import os 
+import os
 import pickle
 
 SIZE_THRESHOLD = 200  # バウンディングボックスの最小サイズ
 IoU_THRESHOLD = 0.5  # IoUの閾値
+
+
 def iou(box1, box2):
     axmin, axmax, aymin, aymax, _ = box1
     bxmin, bxmax, bymin, bymax, _ = box2
     area_a = (axmax - axmin) * (aymax - aymin)
     area_b = (bxmax - bxmin) * (bymax - bymin)
-    
+
     abxmin = max(axmin, bxmin)
     abxmax = min(axmax, bxmax)
     abymin = max(aymin, bymin)
@@ -17,10 +19,11 @@ def iou(box1, box2):
     union = area_a + area_b - intersection
     return intersection / union if union > 0 else 0
 
+
 class Evaluation:
     def __init__(self, dataset):
         self.dataset = dataset
-        
+
     def cov_od(self):
         total_obj = self.dataset.total_objects()
         common_fp = self.dataset.common_false_positives()
@@ -29,10 +32,10 @@ class Evaluation:
         for frame in range(self.dataset.num_frames):
             frame_obj = total_obj[frame]
             num_obj = sum(len(bboxes) for bboxes in frame_obj.values())
-            
+
             frame_fp = common_fp[frame]
             num_fp = sum(len(bboxes) for bboxes in frame_fp.values())
-            
+
             frame_fn = common_fn[frame]
             num_fn = sum(len(bboxes) for bboxes in frame_fn.values())
 
@@ -42,20 +45,21 @@ class Evaluation:
                 cov_od += (num_fp+num_fn)/(num_obj)
             # print(f"Frame {frame}: num_obj={num_obj}, num_fp={num_fp}, num_fn={num_fn}, cov_od={cov_od}")
         return 1-(cov_od/self.dataset.num_frames)
-    
+
+
 class Dataset:
     class_Map = {
-        0: 0,  #pedestrian
-        1: 2,  #bicycle
-        2: 2,  #motorcycle
-        3: 2,  #car
-        5: 2,  #bus
-        7: 2,  #truck
-        9: 9,  #traffic light
+        0: 0,  # pedestrian
+        1: 2,  # bicycle
+        2: 2,  # motorcycle
+        3: 2,  # car
+        5: 2,  # bus
+        7: 2,  # truck
+        9: 9,  # traffic light
         # 11: 11, #stop sign
-    }   
-        
-    def __init__(self, gt_dir, models, cameras:list, map, conf_threshold):
+    }
+
+    def __init__(self, gt_dir, models, cameras: list, map, conf_threshold):
         self.cameras = cameras
         self.map = map
         self.gt = self.get_gt(gt_dir)
@@ -64,7 +68,7 @@ class Dataset:
         self.conf_threshold = conf_threshold
         self.detections = self.get_detections()
         self.num_frames = len(self.gt)
-        
+
     def get_gt(self, gt_dir) -> list:
         gt = list()
         for filename in os.listdir(gt_dir):
@@ -77,7 +81,8 @@ class Dataset:
                         continue
                     parts = line.strip().split(',')
                     # print(f"parts: {parts}")
-                    class_id = self.class_Map.get((int(parts[0])), -1)  # -1（無視するクラス）
+                    class_id = self.class_Map.get(
+                        (int(parts[0])), -1)  # -1（無視するクラス）
                     if class_id == -1:
                         continue
                     xmin = int(float(parts[1]))
@@ -91,7 +96,8 @@ class Dataset:
                         continue
                     if class_id not in frame_gt:
                         frame_gt[class_id] = list()
-                    frame_gt[class_id].append((xmin, xmax, ymin, ymax, distance))
+                    frame_gt[class_id].append(
+                        (xmin, xmax, ymin, ymax, distance))
                 gt.append(frame_gt)
         return gt
 
@@ -104,7 +110,7 @@ class Dataset:
             detections = self.get_camera_detections(detection_dir)
             all_detections[model+camera] = detections
         return all_detections
-    
+
     def get_camera_detections(self, detection_dir) -> list:
         detections = list()
         for filename in os.listdir(detection_dir):
@@ -116,7 +122,8 @@ class Dataset:
                     if not line.strip():
                         continue
                     parts = line.strip().split(',')
-                    class_id = self.class_Map.get(int(parts[0]), -1)  #-1（無視するクラス）
+                    class_id = self.class_Map.get(
+                        int(parts[0]), -1)  # -1（無視するクラス）
                     if class_id == -1:
                         continue
                     if detection_dir.endswith('front'):
@@ -137,10 +144,11 @@ class Dataset:
                         continue
                     if class_id not in frame_detections:
                         frame_detections[class_id] = list()
-                    frame_detections[class_id].append((xmin, xmax, ymin, ymax, confidence))
+                    frame_detections[class_id].append(
+                        (xmin, xmax, ymin, ymax, confidence))
                 detections.append(frame_detections)
         return detections
-    
+
     def affirmative_detections(self) -> list:
         affirmative_detections = list()
         for i in range(self.num_frames):
@@ -168,7 +176,7 @@ class Dataset:
                         frame_affirmative[class_id].append(bbox)
             affirmative_detections.append(frame_affirmative)
         return affirmative_detections
-    
+
     def unanimous_detections(self) -> list:
         unanimous_detections = list()
         for i in range(self.num_frames):
@@ -179,7 +187,8 @@ class Dataset:
                     unanimous = True
                     for camera in self.cameras[1:]:
                         mathced = False
-                        other_bboxes = self.detections[camera][i].get(class_id, [])
+                        other_bboxes = self.detections[camera][i].get(
+                            class_id, [])
                         for other_bbox in other_bboxes:
                             if iou(base_bbox, other_bbox) > IoU_THRESHOLD:
                                 mathced = True
@@ -192,15 +201,16 @@ class Dataset:
                             frame_unanimous[class_id] = list()
                         frame_unanimous[class_id].append(base_bbox)
             unanimous_detections.append(frame_unanimous)
-            
+
         return unanimous_detections
-    
+
     def common_false_positives(self) -> list:
         common_fp = list()
         for frame in range(self.num_frames):
             frame_fp = dict()
             # camera_fps = [self.camera_false_positives(camera, i) for camera in self.cameras]
-            camera_fps = [self.camera_false_positives(model, camera, frame) for model, camera in zip(self.models, self.cameras)]
+            camera_fps = [self.camera_false_positives(
+                model, camera, frame) for model, camera in zip(self.models, self.cameras)]
             if min(len(camera_fp) for camera_fp in camera_fps) == 0:
                 common_fp.append(frame_fp)
                 continue
@@ -221,16 +231,17 @@ class Dataset:
                     if unanimous:
                         if class_id not in frame_fp:
                             frame_fp[class_id] = list()
-                        frame_fp[class_id].append(bbox)    
+                        frame_fp[class_id].append(bbox)
             common_fp.append(frame_fp)
         return common_fp
-    
+
     def affirmative_false_positives(self) -> list:
         affirmative_fps = list()
         for frame in range(self.num_frames):
             frame_fp = dict()
             # camera_fps = [self.camera_false_positives(camera, frame) for camera in self.cameras]
-            camera_fps = [self.camera_false_positives(model, camera, frame) for model, camera in zip(self.models, self.cameras)]
+            camera_fps = [self.camera_false_positives(
+                model, camera, frame) for model, camera in zip(self.models, self.cameras)]
             for i in range(self.numversions):
                 buffer = dict()
                 camera = self.cameras[i]
@@ -255,9 +266,9 @@ class Dataset:
                     for bbox in bboxes:
                         frame_fp[class_id].append(bbox)
             affirmative_fps.append(frame_fp)
-        
+
         return affirmative_fps
-    
+
     def camera_false_positives(self, model, camera, frame) -> dict:
         frame_detections = self.detections[model+camera][frame]
         frame_gt = self.gt[frame]
@@ -277,13 +288,14 @@ class Dataset:
                             frame_fp[class_id] = list()
                         frame_fp[class_id].append(bbox)
         return frame_fp
-    
+
     def common_false_negatives(self) -> list:
         common_fn = list()
         for frame in range(self.num_frames):
             frame_fn = dict()
             # camera_fps = [self.camera_false_negatives(camera, i) for camera in self.cameras]
-            camera_fps = [self.camera_false_negatives(model, camera, frame) for model, camera in zip(self.models, self.cameras)]
+            camera_fps = [self.camera_false_negatives(
+                model, camera, frame) for model, camera in zip(self.models, self.cameras)]
             if min(len(camera_fp) for camera_fp in camera_fps) == 0:
                 common_fn.append(frame_fn)
                 continue
@@ -304,10 +316,10 @@ class Dataset:
                     if unanimous:
                         if class_id not in frame_fn:
                             frame_fn[class_id] = list()
-                        frame_fn[class_id].append(bbox)    
+                        frame_fn[class_id].append(bbox)
             common_fn.append(frame_fn)
         return common_fn
-    
+
     def camera_false_negatives(self, model, camera, frame) -> dict:
         frame_detections = self.detections[model+camera][frame]
         frame_gt = self.gt[frame]
@@ -345,38 +357,30 @@ class Dataset:
             total_objects.append(frame_object)
         return total_objects
 
+
 def main():
-    # map = 'Town01_Opt'
+    import itertools
+    map = 'Town01_Opt'
     # map = 'Town05_Opt'
-    map = 'Town10HD_Opt'
+    # map = 'Town10HD_Opt'
     gt_dir = f'C:/CARLA_Latest/WindowsNoEditor/output/label/{map}/front'
     # detection_dir = f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{map}/labels/{model}_results/'
+
     CONF_THRESHOLD = 0.25
-    # models = ["yolov8n", "yolov5n", "SSD"]
-    # models = ["yolov8n", "yolov8n", "yolov8n"]
-    # models = ["yolov5n", "yolov5n", "yolov5n"]
-    models = ["SSD", "SSD", "SSD"]
+    models = ["yolov8n", "yolov5n", "SSD"]
     cameras = ["front", "left_1", "right_1"]
-    # cameras = ["front", "front", "front"]
-    for version in range(3):
-        usemodels, usecameras = models[:version+1], cameras[:version+1]
-        print(f"Evaluating ({usemodels},{usecameras}) on {map} with confidence threshold {CONF_THRESHOLD}")
-        # データセットを一度だけロードし、キャッシュする
-        # cache_file = f'{model}_{map}_{len(usecameras)}_{model}_cache.pkl'
-        # if os.path.exists(cache_file):
-        #     print(f"Loading dataset from cache: {cache_file}")
-        #     with open(cache_file, 'rb') as f:
-        #         dataset = pickle.load(f)
-        # else:
-        #     print("Loading dataset from raw files...")
-        #     dataset = Dataset(gt_dir, detection_dir, usecameras, CONF_THRESHOLD)
-        #     with open(cache_file, 'wb') as f:
-        #         pickle.dump(dataset, f)
-        #     print(f"Dataset cached to {cache_file}")
-        dataset = Dataset(gt_dir, usemodels, usecameras, map, CONF_THRESHOLD)
-        eval = Evaluation(dataset)
-        print(f"{version+1} version")
-        print(f"    {eval.cov_od()}")
-    
+    for version in range(1, 4):
+        print(f"{'-'*20} {version} version {'-'*20}")
+        for usecamera in itertools.combinations_with_replacement(cameras, version):
+            print(f"    Cameras: {usecamera}")
+            for usemodel in itertools.combinations_with_replacement(models, version):
+                print(f"        Models: {usemodel}")
+                usemodels, usecameras = usemodel, usecamera
+                dataset = Dataset(gt_dir, usemodels,
+                                  usecameras, map, CONF_THRESHOLD)
+                eval = Evaluation(dataset)
+                print(f"            {eval.cov_od()}")
+
+
 if __name__ == "__main__":
     main()

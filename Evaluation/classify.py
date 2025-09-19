@@ -2,10 +2,12 @@ import os
 import utils
 
 
-def classify(gt_dir, det_dir):
+def classify(gt_dir, det_dir) -> list:
     """
     gt_dir: Ground Truth directory
     det_dir: Detection results directory
+
+    return: List of classification results for each frame
     """
     iou_threshold = 0.5
     results = list()
@@ -44,6 +46,7 @@ def classify(gt_dir, det_dir):
         for class_id in det:
             result['FP'][class_id] = det[class_id]
         results.append(result)
+    print(f"len of results: {len(results)}")
     return results
 
 
@@ -104,6 +107,66 @@ def get_detections(det_file_path) -> dict:
             detections[class_id].append((xmin, xmax, ymin, ymax, confidence))
 
     return detections
+
+
+def common_fp(result_list):
+    num_version = len(result_list)
+    num_frame = len(result_list[0]['FP'])
+    if num_version == 1:
+        return result_list[0]['FP']
+
+    common_fp = list()
+    for frame in range(num_frame):
+        frame_common_fp = result_list[0][frame]['FP']  # 最初のバージョンのFPを基準にする
+        for version in range(1, num_version):
+            frame_fp = result_list[version][frame]['FP']
+            for class_id, boxes in frame_fp.items():
+                if class_id not in frame_common_fp:
+                    continue
+                for box in boxes:
+                    # 共通FP内のboxと最大のIoUを持つboxを探す
+                    max_iou = 0.0
+                    matched_box = None
+                    for common_box in frame_common_fp[class_id]:
+                        iou = utils.iou(box, common_box)
+                        if iou > max_iou:
+                            max_iou = iou
+                            matched_box = common_box
+                    if max_iou > utils.IoU_THRESHOLD:
+                        frame_common_fp[class_id].remove(matched_box)
+
+        common_fp.append(frame_common_fp)
+    return common_fp
+
+
+def common_fn(result_list):
+    num_version = len(result_list)
+    num_frame = len(result_list[0]['FN'])
+    if num_version == 1:
+        return result_list[0]['FN']
+
+    common_fn = list()
+    for frame in range(num_frame):
+        frame_common_fn = result_list[0][frame]['FN']  # 最初のバージョンのFNを基準にする
+        for version in range(1, num_version):
+            frame_fn = result_list[version][frame]['FN']
+            for class_id, boxes in frame_fn.items():
+                if class_id not in frame_common_fn:
+                    continue
+                for box in boxes:
+                    # 共通FN内のboxと最大のIoUを持つboxを探す
+                    max_iou = 0.0
+                    matched_box = None
+                    for common_box in frame_common_fn[class_id]:
+                        iou = utils.iou(box, common_box)
+                        if iou > max_iou:
+                            max_iou = iou
+                            matched_box = common_box
+                    if max_iou > utils.IoU_THRESHOLD:
+                        frame_common_fn[class_id].remove(matched_box)
+
+        common_fn.append(frame_common_fn)
+    return common_fn
 
 
 if __name__ == '__main__':

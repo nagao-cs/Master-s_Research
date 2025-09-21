@@ -1,5 +1,6 @@
 import os
 import utils
+from pprint import pprint
 
 
 def classify(gt_dir, det_dir) -> list:
@@ -9,7 +10,6 @@ def classify(gt_dir, det_dir) -> list:
 
     return: List of classification results for each frame
     """
-    iou_threshold = 0.5
     results = list()
     gt_files = [os.path.join(gt_dir, gt_file)
                 for gt_file in os.listdir(gt_dir)]
@@ -21,32 +21,51 @@ def classify(gt_dir, det_dir) -> list:
         gt = get_gt(gt_file)
         det = get_detections(det_file)
 
-        # TP, FNを分類する
+        # クラスごとに処理
         for class_id in gt:
             gt_boxes = gt[class_id]
             det_boxes = det.get(class_id, [])
-            for gt_box in gt_boxes:
-                max_iou = 0.0
-                matched_det = None
-                for det_box in det_boxes:
+
+            # 信頼度でソート
+            det_boxes.sort(key=lambda x: x[4], reverse=True)  # x[4]はconfidence
+
+            if class_id not in result['TP']:
+                result['TP'][class_id] = list()
+            if class_id not in result['FN']:
+                result['FN'][class_id] = list()
+            if class_id not in result['FP']:
+                result['FP'][class_id] = list()
+
+            # GTとDetectionのマッチング
+            used_gt = set()  # マッチ済みのGTを記録
+
+            for det_box in det_boxes:
+                best_iou = 0.0
+                best_gt_idx = -1
+
+                # 未使用のGTと最もIoUが高いものを探す
+                for i, gt_box in enumerate(gt_boxes):
+                    if i in used_gt:
+                        continue
                     iou = utils.iou(gt_box, det_box)
-                    if iou >= iou_threshold and iou > max_iou:
-                        max_iou = iou
-                        matched_det = det_box
-                if matched_det:
-                    if class_id not in result['TP']:
-                        result['TP'][class_id] = list()
-                    result['TP'][class_id].append(matched_det)
-                    det_boxes.remove(matched_det)  # 一度マッチした検出は除外
+                    if iou >= utils.IoU_THRESHOLD and iou > best_iou:
+                        best_iou = iou
+                        best_gt_idx = i
+
+                # マッチング結果に基づいて分類
+                if best_gt_idx >= 0:
+                    result['TP'][class_id].append(det_box)
+                    used_gt.add(best_gt_idx)
                 else:
-                    if class_id not in result['FN']:
-                        result['FN'][class_id] = list()
+                    result['FP'][class_id].append(det_box)
+
+            # 未使用のGTをFNとして追加
+            for i, gt_box in enumerate(gt_boxes):
+                if i not in used_gt:
                     result['FN'][class_id].append(gt_box)
-        # FPを分類する
-        for class_id in det:
-            result['FP'][class_id] = det[class_id]
+
         results.append(result)
-    print(f"len of results: {len(results)}")
+        # pprint(f"results: {results}")
     return results
 
 
@@ -64,10 +83,11 @@ def get_gt(gt_file_path) -> dict:
             class_id = utils.class_Map.get((int(parts[0])), -1)  # -1（無視するクラス）
             if class_id == -1:
                 continue
-            xmin = int(float(parts[1]))
-            xmax = int(float(parts[2]))
-            ymin = int(float(parts[3]))
-            ymax = int(float(parts[4]))
+            # class_id = int(parts[0])
+            xmin = float(parts[1])
+            xmax = float(parts[2])
+            ymin = float(parts[3])
+            ymax = float(parts[4])
             distance = 0.0  # 仮の値、必要に応じて計算する
             size = (xmax-xmin) * (ymax-ymin)
             if size < utils.SIZE_THRESHOLD:
@@ -94,94 +114,19 @@ def get_detections(det_file_path) -> dict:
             class_id = utils.class_Map.get((int(parts[0])), -1)  # -1（無視するクラス）
             if class_id == -1:
                 continue
-            xmin = int(float(parts[1]))
-            xmax = int(float(parts[2]))
-            ymin = int(float(parts[3]))
-            ymax = int(float(parts[4]))
+            # class_id = int(parts[0])
+            xmin = float(parts[1])
+            xmax = float(parts[2])
+            ymin = float(parts[3])
+            ymax = float(parts[4])
             confidence = float(parts[5])
             size = (xmax-xmin) * (ymax-ymin)
             if size < utils.SIZE_THRESHOLD:
+                continue
+            if confidence < utils.CONF_THRESHOLD:
                 continue
             if class_id not in detections:
                 detections[class_id] = list()
             detections[class_id].append((xmin, xmax, ymin, ymax, confidence))
 
     return detections
-
-
-def common_fp(result_list):
-    num_version = len(result_list)
-    num_frame = len(result_list[0]['FP'])
-    if num_version == 1:
-        return result_list[0]['FP']
-
-    common_fp = list()
-    for frame in range(num_frame):
-        frame_common_fp = result_list[0][frame]['FP']  # 最初のバージョンのFPを基準にする
-        for version in range(1, num_version):
-            frame_fp = result_list[version][frame]['FP']
-            for class_id, boxes in frame_fp.items():
-                if class_id not in frame_common_fp:
-                    continue
-                for box in boxes:
-                    # 共通FP内のboxと最大のIoUを持つboxを探す
-                    max_iou = 0.0
-                    matched_box = None
-                    for common_box in frame_common_fp[class_id]:
-                        iou = utils.iou(box, common_box)
-                        if iou > max_iou:
-                            max_iou = iou
-                            matched_box = common_box
-                    if max_iou > utils.IoU_THRESHOLD:
-                        frame_common_fp[class_id].remove(matched_box)
-
-        common_fp.append(frame_common_fp)
-    return common_fp
-
-
-def common_fn(result_list):
-    num_version = len(result_list)
-    num_frame = len(result_list[0]['FN'])
-    if num_version == 1:
-        return result_list[0]['FN']
-
-    common_fn = list()
-    for frame in range(num_frame):
-        frame_common_fn = result_list[0][frame]['FN']  # 最初のバージョンのFNを基準にする
-        for version in range(1, num_version):
-            frame_fn = result_list[version][frame]['FN']
-            for class_id, boxes in frame_fn.items():
-                if class_id not in frame_common_fn:
-                    continue
-                for box in boxes:
-                    # 共通FN内のboxと最大のIoUを持つboxを探す
-                    max_iou = 0.0
-                    matched_box = None
-                    for common_box in frame_common_fn[class_id]:
-                        iou = utils.iou(box, common_box)
-                        if iou > max_iou:
-                            max_iou = iou
-                            matched_box = common_box
-                    if max_iou > utils.IoU_THRESHOLD:
-                        frame_common_fn[class_id].remove(matched_box)
-
-        common_fn.append(frame_common_fn)
-    return common_fn
-
-
-if __name__ == '__main__':
-    gt_dir = 'C:/CARLA_Latest/WindowsNoEditor/output/label/Town01_Opt/right_1'
-    det_dir = 'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/Town01_Opt/labels/yolov8n_results/right_1/'
-    results = classify(gt_dir, det_dir)
-    precision, recall = 0.0, 0.0
-
-    for result in results:
-        TP = sum(len(v) for v in result['TP'].values())
-        FP = sum(len(v) for v in result['FP'].values())
-        FN = sum(len(v) for v in result['FN'].values())
-        precision += TP / (TP + FP) if (TP + FP) > 0 else 0
-        recall += TP / (TP + FN) if (TP + FN) > 0 else 0
-    num_frame = len(results)
-    precision /= num_frame
-    recall /= num_frame
-    print(f'Precision: {precision}, Recall: {recall}')

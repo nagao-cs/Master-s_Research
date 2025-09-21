@@ -58,7 +58,7 @@ class Evaluation:
         adaptive_cov_od = 0.0
         adaptive_conut = 0
         for frame in range(self.dataset.num_frame):
-            num_gt = self.dataset.num_gt[frame]
+            num_gt = self.dataset.num_gt_list[frame]
 
             if num_gt >= utils.ADAPTIVE_THRESHOLD:
                 frame_obj = total_objs[frame]
@@ -92,7 +92,7 @@ class Evaluation:
         adaptive_cer_od = 0.0
         adaptive_conut = 0
         for frame in range(self.dataset.num_frame):
-            num_gt = self.dataset.num_gt[frame]
+            num_gt = self.dataset.num_gt_list[frame]
 
             if num_gt >= utils.ADAPTIVE_THRESHOLD:
                 frame_obj = total_objs[frame]
@@ -145,7 +145,7 @@ if __name__ == "__main__":
     import sys
     debug = True if len(sys.argv) > 1 and (sys.argv[1] == 'debug') else False
     maps = [
-        'Town01_Opt',
+        # 'Town01_Opt',
         # 'Town05_Opt',
         'Town10HD_Opt'
     ]
@@ -167,6 +167,8 @@ if __name__ == "__main__":
 
                 ds = dataset.Dataset(gt_dir, det_dirs, len(model), debug)
 
+                # print(f"            common_fp: {ds.common_fp()[:3]}")
+                # print(f"            common_fn: {ds.common_fn()[:3]}")
                 print(f"            cov_od: {Evaluation(ds).cov_od()}")
                 print(
                     f"            adaptive_cov_od: {Evaluation(ds).adaptive_cov_od()}")
@@ -174,5 +176,6 @@ if __name__ == "__main__":
                 print(f"            cer_od: {Evaluation(ds).cer_od()}")
                 print(
                     f"            adaptive_cer_od: {Evaluation(ds).adaptive_cer_od()} ")
-                # print(
-                # f"            avg_accuracy: {Evaluation(ds).avg_accuracy()}")
+                print()
+                # # print(
+                # # f"            avg_accuracy: {Evaluation(ds).avg_accuracy()}")

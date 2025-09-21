@@ -10,10 +10,10 @@ class Dataset:
             for version in range(num_version):
                 self.results[version] = self.results[version][:10]
         self.num_frame = len(self.results[0])
-        self.num_gt = self.num_gt()
+        self.num_gt_list = self.num_gt()
         self.num_version = num_version
 
-    def num_gt(self):
+    def num_gt(self) -> list[int]:
         num_gt = list()
         for frame in range(self.num_frame):
             frame_num_gt = 0
@@ -97,14 +97,12 @@ class Dataset:
         return common_fn
 
     def all_fp(self):
-        all_fp = list()
+        all_fp = list() #各フレームごとの全物体検出結果のFPをまとめたもの
 
         for frame in range(self.num_frame):
-            frame_all_fp = dict()
-            frame_all_fp = self.results[0][frame]['FP']
-            for version in range(1, self.num_version):
-                frame_fp = self.results[version][frame]['FP']
-                for class_id, boxes in frame_fp.items():
+            frame_all_fp = dict() # 特定のフレーム内の全物体検出結果のFP(重複なし)
+            for version in range(self.num_version):
+                for class_id, boxes in self.results[version][frame]['FP'].items():
                     if class_id not in frame_all_fp:
                         frame_all_fp[class_id] = list()
                     for box in boxes:
@@ -122,10 +120,8 @@ class Dataset:
 
         for frame in range(self.num_frame):
             frame_all_fn = dict()
-            frame_all_fn = self.results[0][frame]['FN']
-            for version in range(1, self.num_version):
-                frame_fn = self.results[version][frame]['FN']
-                for class_id, boxes in frame_fn.items():
+            for version in range(self.num_version):
+                for class_id, boxes in self.results[version][frame]['FN'].items():
                     if class_id not in frame_all_fn:
                         frame_all_fn[class_id] = list()
                     for box in boxes:
@@ -143,7 +139,7 @@ class Dataset:
         all_fp = self.all_fp()
         for frame in range(self.num_frame):
             frame_total_obj = 0
-            frame_total_obj += self.num_gt[frame]
+            frame_total_obj += self.num_gt_list[frame]
             frame_total_obj += sum(len(boxes)
                                    for boxes in all_fp[frame].values())
             total_obj.append(frame_total_obj)

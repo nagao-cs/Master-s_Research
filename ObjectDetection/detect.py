@@ -1,13 +1,13 @@
 import os
 import cv2
 from concurrent.futures import ThreadPoolExecutor
-# from models.Yolov8nDetector import Yolov8nDetector
-# from models.Yolov11 import Yolo11nDetector
+from models.Yolov8n import Yolov8nDetector
+from models.Yolov11 import Yolo11nDetector
 # from models.SSD import SSDDetector
 # from models.FastRCNN import FastRCNNDetector
-# from models.Yolov5 import Yolov5nDetector
+from models.Yolov5 import Yolov5nDetector
 # from models.mobilenet import MobilenetDetector
-from models.DETR import DETRDetector
+# from models.DETR import DETRDetector
 
 COCO_LABELS = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus",
@@ -25,38 +25,47 @@ COCO_LABELS = [
     "hair drier", "toothbrush"
 ]
 
-SIZE_THRESHOLD=100
-
 if __name__ == "__main__":
+    conf_threshold = 0.25
     # model = FastRCNNDetector()
     # model = Yolo11nDetector()
     # model = Yolov8nDetector()
     # model = SSDDetector()
-    # model = Yolov5nDetector()
+    model = Yolov5nDetector()
     # model = MobilenetDetector()
-    model = DETRDetector()
-    conf_threshold = 0.5
+    # model = DETRDetector()
     input_base_dir = "C:\CARLA_Latest\WindowsNoEditor\output\image"
-    map = "Town01_Opt"
-    cameras = ["front", "left_1", "right_1"]
+    maps = [
+        "Town01_Opt",
+        "Town05_Opt",
+        "Town10HD_Opt"
+    ]
+    cameras = [
+        "front",
+        # "left_1",
+        # "right_1"
+    ]
     import time
     start = time.time()
-    for camera in cameras:
-        input_images_directory = os.path.join(input_base_dir, map, "original", camera)
-        if not os.path.exists(input_images_directory):
-            print(f"Input directory does not exist: {input_images_directory}")
-            continue
-        for image_file in os.listdir(input_images_directory):
-            image_path = os.path.join(input_images_directory, image_file)
-            if image_path is None:
-                print(f"Could not read image: {image_path}")
+    for map in maps:
+        for camera in cameras:
+            input_images_directory = os.path.join(
+                input_base_dir, map, "original", camera)
+            if not os.path.exists(input_images_directory):
+                print(
+                    f"Input directory does not exist: {input_images_directory}")
                 continue
-            bboxes = model.predict(image_path)
-            index = image_file.split('.')[0]
-            model.save_result(
-                image_path, bboxes, map, camera, index
-            )
-            # print(f"Processed {image_file} for camera {camera}")
+            for image_file in os.listdir(input_images_directory):
+                image_path = os.path.join(input_images_directory, image_file)
+                if image_path is None:
+                    print(f"Could not read image: {image_path}")
+                    continue
+                bboxes = model.predict(image_path)
+                index = image_file.split('.')[0]
+                model.save_result(
+                    image_path, bboxes, map, camera, index
+                )
+                # print(f"Processed {image_file} for camera {camera}")
     end = time.time()
     print(f"total object detection time: {end - start:.2f} seconds")
     print("All images processed.")

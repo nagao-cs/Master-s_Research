@@ -1,5 +1,7 @@
 SIZE_THRESHOLD = 200  # バウンディングボックスの最小サイズ
 IoU_THRESHOLD = 0.5  # IoUの閾値
+CONF_THRESHOLD = 0.5  # 信頼度の閾値
+ADAPTIVE_THRESHOLD = 10  # 適応的評価の閾値
 class_Map = {
     0: 0,  # pedestrian
     1: 2,  # bicycle

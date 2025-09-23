@@ -1,4 +1,4 @@
-SIZE_THRESHOLD = 100  # バウンディングボックスの最小サイズ
+SIZE_THRESHOLD = 200  # バウンディングボックスの最小サイズ
 IoU_THRESHOLD = 0.5  # IoUの閾値
 CONF_THRESHOLD = 0.2  # 信頼度の閾値
 ADAPTIVE_THRESHOLD = 5  # 適応的評価の閾値
@@ -27,3 +27,14 @@ def iou(box1, box2):
     intersection = max(0, abxmax - abxmin) * max(0, abymax - abymin)
     union = area_a + area_b - intersection
     return intersection / union if union > 0 else 0
+
+
+if __name__ == "__main__":
+    # テスト用
+    box1 = (0.08739471435546875, 72.09510040283203,
+            324.7374572753906, 374.1318359375, 0.44695085287094116)
+    box2 = (0.0, 81.1821085767601, 320.76099300798137, 373.40947502363366, 0.0)
+
+    print("Test with debug output:")
+    iou_value = iou(box1, box2)
+    print(f"Final IoU: {iou_value}")

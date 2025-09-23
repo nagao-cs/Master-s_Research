@@ -20,15 +20,15 @@ class Evaluation:
             frame_common_fn = common_fns[frame]
             num_fp = sum(len(bboxes) for bboxes in frame_common_fp.values())
             num_fn = sum(len(bboxes) for bboxes in frame_common_fn.values())
-            cov_od += 1 - ((num_fp + num_fn) /
-                           frame_obj) if frame_obj > 0 else 1
+            cov_od += ((num_fp + num_fn) /
+                       frame_obj) if frame_obj > 0 else 0
 
             if frame_obj == 0 and (num_fp > 0 or num_fn > 0):
                 print(
                     f"frame: {frame}, obj: {frame_obj}, fp: {num_fp}, fn: {num_fn}")
             # print(
             #     f"frame: {frame}, obj: {frame_obj}, fp: {num_fp}, fn: {num_fn}, cov_od: {(num_fp + num_fn) / frame_obj if frame_obj > 0 else 0}")
-        cov_od = (cov_od/self.dataset.num_frame)
+        cov_od = 1 - (cov_od/self.dataset.num_frame)
         return cov_od
 
     def cer_od(self):
@@ -52,13 +52,13 @@ class Evaluation:
         return cer_od
 
     def adaptive_cov_od(self):
-        total_objs = self.dataset.total_obj()
-        common_fps = self.dataset.common_fp()
-        common_fns = self.dataset.common_fn()
+        total_objs = self.dataset.total_obj_list
+        common_fps = self.dataset.common_fp_list
+        common_fns = self.dataset.common_fn_list
         adaptive_cov_od = 0.0
         adaptive_conut = 0
         for frame in range(self.dataset.num_frame):
-            num_gt = self.dataset.num_gt[frame]
+            num_gt = self.dataset.num_gt_list[frame]
 
             if num_gt >= utils.ADAPTIVE_THRESHOLD:
                 frame_obj = total_objs[frame]
@@ -92,7 +92,7 @@ class Evaluation:
         adaptive_cer_od = 0.0
         adaptive_conut = 0
         for frame in range(self.dataset.num_frame):
-            num_gt = self.dataset.num_gt[frame]
+            num_gt = self.dataset.num_gt_list[frame]
 
             if num_gt >= utils.ADAPTIVE_THRESHOLD:
                 frame_obj = total_objs[frame]
@@ -146,7 +146,7 @@ if __name__ == "__main__":
     debug = True if len(sys.argv) > 1 and (sys.argv[1] == 'debug') else False
     maps = [
         'Town01_Opt',
-        # 'Town05_Opt',
+        'Town05_Opt',
         'Town10HD_Opt'
     ]
     models = [
@@ -165,8 +165,12 @@ if __name__ == "__main__":
                 det_dirs = [
                     f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{map}/labels/{m}_results/front' for m in model]
 
-                ds = dataset.Dataset(gt_dir, det_dirs, len(model), debug)
-
+                ds = dataset.Dataset(gt_dir, det_dirs, version, debug)
+                # print(*ds.results[0][:3], sep='\n')
+                # print("common_fp", *ds.common_fp()[:3], sep='\n')
+                # print("common_fn", *ds.common_fn()[:3], sep='\n')
+                # print("all_fp", * ds.all_fp()[:3], sep='\n')
+                # print("all_fn", * ds.all_fn()[:3], sep='\n')
                 print(f"            cov_od: {Evaluation(ds).cov_od()}")
                 print(
                     f"            adaptive_cov_od: {Evaluation(ds).adaptive_cov_od()}")
@@ -174,5 +178,6 @@ if __name__ == "__main__":
                 print(f"            cer_od: {Evaluation(ds).cer_od()}")
                 print(
                     f"            adaptive_cer_od: {Evaluation(ds).adaptive_cer_od()} ")
-                # print(
-                # f"            avg_accuracy: {Evaluation(ds).avg_accuracy()}")
+                print()
+                # # print(
+                # # f"            avg_accuracy: {Evaluation(ds).avg_accuracy()}")

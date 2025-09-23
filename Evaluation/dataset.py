@@ -4,6 +4,7 @@ import utils
 
 class Dataset:
     def __init__(self, gt_dir, det_dirs, num_version, debug=False):
+        self.num_version = num_version
         self.results = [classify.classify(gt_dir, det_dir)
                         for det_dir in det_dirs]
         if debug:
@@ -11,7 +12,11 @@ class Dataset:
                 self.results[version] = self.results[version][:10]
         self.num_frame = len(self.results[0])
         self.num_gt_list = self.num_gt()
-        self.num_version = num_version
+        self.common_fp_list = self.common_fp()
+        self.common_fn_list = self.common_fn()
+        self.all_fp_list = self.all_fp()
+        self.all_fn_list = self.all_fn()
+        self.total_obj_list = self.total_obj()
 
     def num_gt(self) -> list[int]:
         num_gt = list()
@@ -49,90 +54,106 @@ class Dataset:
         return common_tp
 
     def common_fp(self):
-        common_fp = list()
-        for frame in range(self.num_frame):
-            frame_common_fp = self.results[0][frame]['FP']  # 最初のバージョンのFPを基準にする
-            for version in range(1, self.num_version):
-                frame_fp = self.results[version][frame]['FP']
-                for class_id, boxes in frame_fp.items():
-                    if class_id not in frame_common_fp:
-                        continue
-                    for box in boxes:
-                        # 共通FP内のboxと最大のIoUを持つboxを探す
-                        max_iou = 0.0
-                        matched_box = None
-                        for common_box in frame_common_fp[class_id]:
-                            iou = utils.iou(box, common_box)
-                            if iou > max_iou:
-                                max_iou = iou
-                                matched_box = common_box
-                        if max_iou > utils.IoU_THRESHOLD:
-                            frame_common_fp[class_id].remove(matched_box)
+        common_fps = list()
 
-            common_fp.append(frame_common_fp)
-        return common_fp
+        for frame in range(self.num_frame):
+            frame_common_fp = dict()
+            version_fps = [self.results[version][frame]['FP'].copy()
+                           for version in range(self.num_version)]
+
+            base_fps = version_fps[0]
+            for class_id in base_fps.keys():
+                frame_common_fp[class_id] = list()
+
+                for base_box in base_fps[class_id]:
+                    is_common = True
+                    for subject_fps in version_fps[1:]:
+                        if class_id not in subject_fps:
+                            is_common = False
+                        matched_box = None
+                        highest_iou = 0.0
+                        for subject_box in subject_fps[class_id]:
+                            iou = utils.iou(base_box, subject_box)
+                            if iou > highest_iou and iou > utils.IoU_THRESHOLD:
+                                highest_iou = iou
+                                matched_box = subject_box
+                        if matched_box is not None:
+                            subject_fps[class_id].remove(matched_box)
+                        else:
+                            is_common = False
+                    if is_common:
+                        frame_common_fp[class_id].append(base_box)
+            common_fps.append(frame_common_fp)
+        return common_fps
 
     def common_fn(self):
-        common_fn = list()
-        for frame in range(self.num_frame):
-            frame_common_fn = self.results[0][frame]['FN']  # 最初のバージョンのFNを基準にする
-            for version in range(1, self.num_version):
-                frame_fn = self.results[version][frame]['FN']
-                for class_id, boxes in frame_fn.items():
-                    if class_id not in frame_common_fn:
-                        continue
-                    for box in boxes:
-                        # 共通FN内のboxと最大のIoUを持つboxを探す
-                        max_iou = 0.0
-                        matched_box = None
-                        for common_box in frame_common_fn[class_id]:
-                            iou = utils.iou(box, common_box)
-                            if iou > max_iou:
-                                max_iou = iou
-                                matched_box = common_box
-                        if max_iou > utils.IoU_THRESHOLD:
-                            frame_common_fn[class_id].remove(matched_box)
+        common_fns = list()
 
-            common_fn.append(frame_common_fn)
-        return common_fn
+        for frame in range(self.num_frame):
+            frame_common_fn = dict()
+
+            base_fns = self.results[0][frame]['FN']
+            for class_id in base_fns.keys():
+                frame_common_fn[class_id] = list()
+                for base_box in base_fns[class_id]:
+                    is_common = True
+                    for version in range(1, self.num_version):
+                        other_fns = self.results[version][frame]['FN']
+                        if class_id not in other_fns:
+                            is_common = False
+                            break
+                        subject_boxes = other_fns[class_id]
+                        if base_box not in subject_boxes:
+                            is_common = False
+                            break
+                    if is_common:
+                        frame_common_fn[class_id].append(base_box)
+            common_fns.append(frame_common_fn)
+        return common_fns
 
     def all_fp(self):
-        all_fp = list() #各フレームごとの全物体検出結果のFPをまとめたもの
+        all_fps = list()
 
         for frame in range(self.num_frame):
-            frame_all_fp = dict() # 特定のフレーム内の全物体検出結果のFP(重複なし)
+            frame_all_fp = dict()  # 各フレームの全FP
+            version_fps = [self.results[version][frame]['FP'].copy()
+                           for version in range(self.num_version)]
             for version in range(self.num_version):
-                for class_id, boxes in self.results[version][frame]['FP'].items():
+                base_fps = version_fps[version]
+                for class_id in base_fps.keys():
                     if class_id not in frame_all_fp:
-                        frame_all_fp[class_id] = list()
-                    for box in boxes:
-                        # 共通FP内に一定以上のIoUを持つboxがなければ追加
-                        for existing_box in frame_all_fp[class_id]:
-                            if utils.iou(box, existing_box) > utils.IoU_THRESHOLD:
-                                break
-                        else:
-                            frame_all_fp[class_id].append(box)
-            all_fp.append(frame_all_fp)
-        return all_fp
+                        frame_all_fp[class_id] = []
+                    for base_box in base_fps[class_id]:
+                        for subject_fps in version_fps[version+1:]:
+                            matched_box = None
+                            highest_iou = 0.0
+                            for subject_box in subject_fps.get(class_id, []):
+                                iou = utils.iou(base_box, subject_box)
+                                if iou > highest_iou and iou > utils.IoU_THRESHOLD:
+                                    highest_iou = iou
+                                    matched_box = subject_box
+                            if matched_box is not None:
+                                subject_fps[class_id].remove(matched_box)
+                        frame_all_fp[class_id].append(base_box)
+            all_fps.append(frame_all_fp)
+        return all_fps
 
     def all_fn(self):
-        all_fn = list()
+        all_fns = list()
 
         for frame in range(self.num_frame):
-            frame_all_fn = dict()
+            frame_all_fn = dict()  # 各フレームの全FN
+
             for version in range(self.num_version):
-                for class_id, boxes in self.results[version][frame]['FN'].items():
+                version_fn = self.results[version][frame]['FN']
+                for class_id, boxes in version_fn.items():
                     if class_id not in frame_all_fn:
                         frame_all_fn[class_id] = list()
-                    for box in boxes:
-                        # 共通FN内に一定以上のIoUを持つboxがなければ追加
-                        for existing_box in frame_all_fn[class_id]:
-                            if utils.iou(box, existing_box) > utils.IoU_THRESHOLD:
-                                break
-                        else:
-                            frame_all_fn[class_id].append(box)
-            all_fn.append(frame_all_fn)
-        return all_fn
+                    for subject_box in boxes:
+                        if subject_box not in frame_all_fn[class_id]:
+                            frame_all_fn[class_id].append(subject_box)
+            all_fns.append(frame_all_fn)
+        return all_fns
 
     def total_obj(self):
         total_obj = list()

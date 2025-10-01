@@ -3,10 +3,13 @@ import random
 import os
 import cv2
 import csv
+
+
 def connect_to_server(host, port, timeout):
     client = carla.Client(host, port)
-    client.set_timeout(timeout) 
+    client.set_timeout(timeout)
     return client
+
 
 def load_map(client, map_name):
     world = client.load_world(map_name)
@@ -15,27 +18,33 @@ def load_map(client, map_name):
     print(f"{map_name} loaded")
     return world, bp
 
+
 def apply_settings(world, synchronous_mode, fixed_delta_seconds):
     settings = world.get_settings()
     settings.synchronous_mode = synchronous_mode
     settings.fixed_delta_seconds = fixed_delta_seconds
     world.apply_settings(settings)
-    print(f"World settings applied: Synchronous mode: {synchronous_mode}, Fixed delta seconds: {fixed_delta_seconds}")
+    print(
+        f"World settings applied: Synchronous mode: {synchronous_mode}, Fixed delta seconds: {fixed_delta_seconds}")
     return world
+
 
 def setting_traffic_manager(client, synchronous_mode):
     traffic_manager = client.get_trafficmanager()
     traffic_manager.set_synchronous_mode(synchronous_mode)
     tm_port = traffic_manager.get_port()
-    print(f"Traffic manager settings applied: Synchronous mode: {synchronous_mode}, Port: {tm_port}")
+    print(
+        f"Traffic manager settings applied: Synchronous mode: {synchronous_mode}, Port: {tm_port}")
     return traffic_manager, tm_port
+
 
 def spawn_npc_vehicles(world, bp, traffic_manager, spawn_points, car_ratio):
     tm_port = traffic_manager.get_port()
     num_spawn_points = len(spawn_points)
     vehicles = list()
     num_vehicles = int(num_spawn_points * car_ratio)
-    car_bps = [v for v in bp.filter('vehicle.*') if 'bike' not in v.id and 'bicycle' not in v.id and 'motorcycle' not in v.id and 'vespa' not in v.id]
+    car_bps = [v for v in bp.filter(
+        'vehicle.*') if 'harley-davidson' not in v.tags and 'yamaha' not in v.tags and 'kawasaki' not in v.tags and 'crossbike' not in v.tags and 'omafiets' not in v.tags and 'vespa' not in v.tags]
     for i in range(num_vehicles):
         vehicle_bp = random.choice(car_bps)
         transform = spawn_points[i+1]
@@ -46,25 +55,67 @@ def spawn_npc_vehicles(world, bp, traffic_manager, spawn_points, car_ratio):
     print(f"{len(vehicles)} 台のNPC車両をスポーン")
     return vehicles
 
-def spawn_npc_pedestrians(world, bp, num_walkers):
-    pedestrians = list()
-    walker_controllers = list()
+
+def spawn_npc_pedestrians(world, client, bp, num_walkers):
+    SpawnActor = carla.command.SpawnActor
+    # 初期化
+    walkers_list = []
+    controllers = []
+    Running_ratio = 0.0
+
+    # 1. スポーン位置の収集
+    spawn_points = []
     for i in range(num_walkers):
-        walker_bp = random.choice(bp.filter('walker.pedestrian.*'))
+        spawn_point = carla.Transform()
         loc = world.get_random_location_from_navigation()
-        if loc:
-            walker = world.try_spawn_actor(walker_bp, carla.Transform(loc))
-            if walker:
-                ctrl_bp = bp.find('controller.ai.walker')
-                ctrl = world.try_spawn_actor(ctrl_bp, carla.Transform(), walker)
-                if ctrl:
-                    ctrl.start()
-                    ctrl.go_to_location(world.get_random_location_from_navigation())
-                    ctrl.set_max_speed(1.0 + random.random())
-                    walker_controllers.append(ctrl)
-                pedestrians.append(walker)
-    print(f"{len(pedestrians)} 人のNPC歩行者をスポーン")    
-    return pedestrians, walker_controllers
+        if (loc != None):
+            spawn_point.location = loc
+            spawn_points.append(spawn_point)
+    print(f"収集した歩行者のスポーンポイント: {len(spawn_points)}")
+
+    # 2. 歩行者のスポーン
+    walker_bps = bp.filter('walker.pedestrian.*')
+    batch = list()
+    for spawn_point in spawn_points:
+        walker_bp = random.choice(walker_bps)
+        batch.append(SpawnActor(walker_bp, spawn_point))
+    results = client.apply_batch_sync(batch, True)
+    walker_ids = []
+    for i in range(len(results)):
+        if results[i].error:
+            print(f"Walker {i} のスポーンに失敗: {results[i].error}")
+        else:
+            walker_ids.append(results[i].actor_id)
+    print(f"{len(walker_ids)} 人のNPC歩行者をスポーン")
+
+    # 3. 歩行者コントローラのスポーン
+    batch = list()
+    walker_controller_bp = bp.find('controller.ai.walker')
+    for i in range(len(walker_ids)):
+        batch.append(SpawnActor(walker_controller_bp,
+                     carla.Transform(), walker_ids[i]))
+    results = client.apply_batch_sync(batch, True)
+    walker_controller_ids = list()
+    for i in range(len(results)):
+        if results[i].error:
+            print(f"Walker Controller {i} のスポーンに失敗: {results[i].error}")
+        else:
+            walker_controller_ids.append(results[i].actor_id)
+    print(f"{len(walker_controller_ids)} 人のNPC歩行者コントローラをスポーン")
+
+    # 4. 歩行者とコントローラの紐付けと設定
+    all_ids = list()
+    for i in range(len(walker_ids)):
+        all_ids.append(walker_ids[i])
+        all_ids.append(walker_controller_ids[i])
+    all_actors = world.get_actors(all_ids)
+    for i in range(0, len(all_actors), 2):
+        walker = all_actors[i]
+        controller = all_actors[i+1]
+        controller.start()
+        controller.go_to_location(world.get_random_location_from_navigation())
+    return all_actors
+
 
 def spawn_Ego_vehicles(client, world, bp, spawn_points):
     spawn_point = spawn_points[-2]
@@ -74,8 +125,9 @@ def spawn_Ego_vehicles(client, world, bp, spawn_points):
         print("Ego vehicle spawned")
     else:
         print("Failed to spawn Ego vehicle")
-        
+
     return ego_vehicle
+
 
 def show_queue_content(queue, display_name):
     for i in range(queue.qsize()):
@@ -84,6 +136,7 @@ def show_queue_content(queue, display_name):
         cv2.waitKey(1)
     else:
         print(f"{display_name} is empty")
+
 
 def save_images(image_queues, cameras, output_dir):
     for i, camera in enumerate(cameras):
@@ -101,6 +154,7 @@ def save_images(image_queues, cameras, output_dir):
             cv2.imshow(camera_name, image)
             num_frame += 1
 
+
 def save_labels(label_queues, cameras, output_dir):
     for i, camera in enumerate(cameras):
         label_queue = label_queues[i]
@@ -114,12 +168,14 @@ def save_labels(label_queues, cameras, output_dir):
             label_path = f"{save_dir}/{num_frame:06d}.csv"
             with open(label_path, 'w') as f:
                 writer = csv.writer(f)
-                writer.writerow(['class_id', 'xmin', 'xmax', 'ymin', 'ymax'])
+                writer.writerow(
+                    ['class_id', 'xmin', 'xmax', 'ymin', 'ymax', 'dist'])
                 for label in labels:
                     writer.writerow(label)
             num_frame += 1
 
-def cleanup(client, world, vehicles, pedestrians, walker_controllers, cameras, depth_cameras):
+
+def cleanup(client, world, vehicles, all_actors, cameras, depth_cameras):
     print("クリーンアップを開始")
     for camera in cameras:
         if camera:
@@ -137,15 +193,10 @@ def cleanup(client, world, vehicles, pedestrians, walker_controllers, cameras, d
         if vehicle:
             vehicle.destroy()
     print(f"{len(vehicles)} 台のNPC車両を破棄")
-    for pedestrian in pedestrians:
-        if pedestrian:
-            pedestrian.destroy()
-    print(f"{len(pedestrians)} 人のNPC歩行者を破棄")
-    for controller in walker_controllers:
-        if controller:
-            controller.stop()
-            controller.destroy()
-    print(f"{len(walker_controllers)} 人のNPC歩行者コントローラを破棄")
+    for i in range(0, len(all_actors), 2):
+        all_actors[i+1].stop()  # コントローラ停止
+    client.apply_batch([carla.command.DestroyActor(x)
+                        for x in all_actors])  # 歩行者とコントローラをまとめて破棄
     settings = world.get_settings()
     settings.synchronous_mode = False
     settings.fixed_delta_seconds = None

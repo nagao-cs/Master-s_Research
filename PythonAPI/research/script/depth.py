@@ -75,6 +75,20 @@ def main():
     spawn_points = world.get_map().get_spawn_points()
     print(f"spawn_points:{len(spawn_points)}")
 
+    # === 天候の設定 ===
+    weather = world.get_weather()
+    weather.cloudiness = 20.0
+    weather.precipitation = 0.0
+    weather.precipitation_deposits = 0.0
+    weather.wind_intensity = 10.0
+    weather.fog_density = 0.0
+    weather.fog_distance = 0.0
+    weather.fog_falloff = 0.0
+    weather.wetness = 0.0
+    weather.sun_azimuth_angle = 180.0
+    weather.sun_altitude_angle = 70.0
+    world.set_weather(weather)
+
     # === NPC車両スポーン ===
     vehicles = carla_util.spawn_npc_vehicles(
         world, blueprint_library, traffic_manager, spawn_points, CAR_RATIO)

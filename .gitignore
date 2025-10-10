@@ -30,3 +30,4 @@ __pycache__/
 /Evaluation/*.pkl
 /detection_env
 /new_detection_env
+/raw_dataset

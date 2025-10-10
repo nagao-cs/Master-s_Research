@@ -104,19 +104,10 @@ def main():
     print(f"spawn_points:{len(spawn_points)}")
 
     # === 天候の設定 ===
-    weather = world.get_weather()
-    print(f"Current weather: {weather}")
-    # weather.cloudiness = 20.0
-    # weather.precipitation = 0.0
-    # weather.precipitation_deposits = 0.0
-    # weather.wind_intensity = 10.0
-    # weather.fog_density = 0.0
-    # weather.fog_distance = 0.0
-    # weather.fog_falloff = 0.0
-    # weather.wetness = 0.0
-    # weather.sun_azimuth_angle = 180.0
-    # weather.sun_altitude_angle = 70.0
-    # world.set_weather(weather)
+    from dynamic_weather import Weather
+    weather = Weather(world.get_weather())
+    speed_factor = 10.0  # 天候変化の速度係数
+    update_freq = 0.1 / speed_factor  # 天候更新頻度（秒）
 
     # === NPC車両スポーン ===
     vehicles = carla_util.spawn_npc_vehicles(
@@ -133,18 +124,18 @@ def main():
 
     # === カメラセンサの設定 ===
     cameras, camera_image_queues = camera_util.setting_camera(
-        world, blueprint_library, ego_vehicle, IM_WIDTH, IM_HEIGHT, FOV, NUM_CAMERA=1)
+        world, blueprint_library, ego_vehicle, IM_WIDTH, IM_HEIGHT, FOV, num_camera=1)
 
     # 深度センサの設定
     depth_cameras, depth_queues = camera_util.setting_depth_camera(
-        world, blueprint_library, ego_vehicle, IM_WIDTH, IM_HEIGHT, FOV, NUM_CAMERA=1)
+        world, blueprint_library, ego_vehicle, IM_WIDTH, IM_HEIGHT, FOV, num_camera=1)
 
     # カメラ行列の計算
     K = camera_util.build_projection_matrix(IM_WIDTH, IM_HEIGHT, FOV)
 
     # === 保存用のキューを作成 ===
-    original_images = list()
-    labels = list()
+    # original_images = list()
+    # labels = list()
 
     # === ターゲットオブジェクトの設定 ===
     target_objects = [
@@ -161,9 +152,14 @@ def main():
     try:
         duration_sec = TIME_DURATION
         num_frames = int(duration_sec / FIXED_DELTA_SECONDS)
+        elapsed_time = 0.0
         for frame_idx in range(num_frames):
             world.tick()  # シミュレーションを進める
-
+            elapsed_time += FIXED_DELTA_SECONDS
+            if elapsed_time > update_freq:
+                weather.tick(speed_factor * elapsed_time)
+                world.set_weather(weather.weather)
+                elapsed_time = 0.0
             idx = 0
             # === RGBカメラと深度カメラを取得 ===
             camera = cameras[idx]
@@ -251,8 +247,8 @@ def main():
             cv2.imshow(display_name, bbox_image)
 
             # 元画像、バウンディングボックス画像、ラベルを保存用キューに追加
-            original_images.append(original_image)
-            labels.append(visible_bboxes)
+            # original_images.append(original_image)
+            # labels.append(visible_bboxes)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 print("ユーザーによりシミュレーションが停止されました。")
                 break
@@ -260,10 +256,10 @@ def main():
         print("シミュレーションが終了しました。")
         os.makedirs("C:\CARLA_Latest\WindowsNoEditor\\raw_dataset",
                     exist_ok=True)
-        raw_image_dir = "C:\CARLA_Latest\WindowsNoEditor\\raw_dataset\images"
-        raw_label_dir = "C:\CARLA_Latest\WindowsNoEditor\\raw_dataset\labels"
-        save_dataset(original_images, labels,
-                     raw_image_dir, raw_label_dir)
+        # raw_image_dir = "C:\CARLA_Latest\WindowsNoEditor\\raw_dataset\images"
+        # raw_label_dir = "C:\CARLA_Latest\WindowsNoEditor\\raw_dataset\labels"
+        # save_dataset(original_images, labels,
+        #              raw_image_dir, raw_label_dir)
 
         # === クリーンアップ ===
         carla_util.cleanup(client, world, vehicles,
@@ -272,6 +268,7 @@ def main():
         cv2.destroyAllWindows()
         end = time.time()
         print(f"シミュレーションにかかった時間: {end - start:.2f}秒")
+
 
         # print(f"画像保存にかかった時間: {save_end - save_start:.2f}秒")
 if __name__ == '__main__':

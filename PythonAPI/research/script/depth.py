@@ -77,17 +77,18 @@ def main():
 
     # === 天候の設定 ===
     weather = world.get_weather()
-    weather.cloudiness = 20.0
-    weather.precipitation = 0.0
-    weather.precipitation_deposits = 0.0
-    weather.wind_intensity = 10.0
-    weather.fog_density = 0.0
-    weather.fog_distance = 0.0
-    weather.fog_falloff = 0.0
-    weather.wetness = 0.0
-    weather.sun_azimuth_angle = 180.0
-    weather.sun_altitude_angle = 70.0
-    world.set_weather(weather)
+    print(f"Current weather: {weather}")
+    # weather.cloudiness = 20.0
+    # weather.precipitation = 0.0
+    # weather.precipitation_deposits = 0.0
+    # weather.wind_intensity = 10.0
+    # weather.fog_density = 0.0
+    # weather.fog_distance = 0.0
+    # weather.fog_falloff = 0.0
+    # weather.wetness = 0.0
+    # weather.sun_azimuth_angle = 180.0
+    # weather.sun_altitude_angle = 70.0
+    # world.set_weather(weather)
 
     # === NPC車両スポーン ===
     vehicles = carla_util.spawn_npc_vehicles(
@@ -200,21 +201,26 @@ def main():
                             yolo_bbox = camera_util.calculate_yolo_bbox(
                                 points_2d_on_image, IM_WIDTH, IM_HEIGHT)
                             if yolo_bbox:
-                                xmin, xmax, ymin, ymax = yolo_bbox
-                                class_id = CLASS_MAPPING.get(target, -1)
-                                size = (xmax - xmin) * (ymax - ymin)
-                                if size < SIZE_THRESHOLD:
-                                    continue
+                                # xmin, xmax, ymin, ymax = yolo_bbox
+                                # class_id = CLASS_MAPPING.get(target, -1)
+                                # size = (xmax - xmin) * (ymax - ymin)
+                                # if size < SIZE_THRESHOLD:
+                                #     continue
+                                # visible_bboxes.append(
+                                #     [class_id, xmin, xmax, ymin, ymax])
+                                x_center, y_center, width, height = yolo_bbox
+                                class_id = camera_util.CLASS_MAPPING.get(
+                                    target, -1)
                                 visible_bboxes.append(
-                                    [class_id, xmin, xmax, ymin, ymax])
+                                    [class_id, x_center, y_center, width, height])
 
                 # === 画像に視認可能なbboxを描画 ===
                 for bbox in visible_bboxes:
-                    class_id, xmin, xmax, ymin, ymax = bbox
-                    xmin = int(xmin)
-                    xmax = int(xmax)
-                    ymin = int(ymin)
-                    ymax = int(ymax)
+                    class_id, x_center, y_center, width, height = bbox
+                    xmin = int((x_center - width / 2) * IM_WIDTH)
+                    xmax = int((x_center + width / 2) * IM_WIDTH)
+                    ymin = int((y_center - height / 2) * IM_HEIGHT)
+                    ymax = int((y_center + height / 2) * IM_HEIGHT)
                     cv2.rectangle(bbox_image, (xmin, ymin),
                                   (xmax, ymax), (0, 255, 0), 2)
                     cv2.putText(bbox_image, f'{class_id}', (xmin, ymin - 10),
@@ -241,14 +247,15 @@ def main():
         # save_start = time.time()
         # # === 画像を保存 ===
         # print("オリジナル画像を保存中")
-        # output_original_dir = OUTPUT_IMG_DIR + f"/{MAP}/original"
-        # carla_util.save_images(original_image_ques, cameras, output_original_dir)
+        # output_original_dir = OUTPUT_IMG_DIR + f"/{MAP}/sunny/original"
+        # carla_util.save_images(original_image_ques,
+        #                        cameras, output_original_dir)
         # print("バウンディングボックスを描画した画像を保存中")
-        # output_bbox_dir = OUTPUT_IMG_DIR + f"/{MAP}/bbox"
+        # output_bbox_dir = OUTPUT_IMG_DIR + f"/{MAP}/sunny/bbox"
         # carla_util.save_images(bbox_image_ques, cameras, output_bbox_dir)
         # # === ラベルを保存 ===
         # print("ラベルを保存中")
-        # output_label_dir = OUTPUT_LABEL_DIR + f"/{MAP}"
+        # output_label_dir = OUTPUT_LABEL_DIR + f"/{MAP}/sunny"
         # carla_util.save_labels(label_ques, cameras, output_label_dir)
         # save_end = time.time()
 

@@ -76,19 +76,10 @@ def main():
     print(f"spawn_points:{len(spawn_points)}")
 
     # === 天候の設定 ===
-    weather = world.get_weather()
-    print(f"Current weather: {weather}")
-    # weather.cloudiness = 20.0
-    # weather.precipitation = 0.0
-    # weather.precipitation_deposits = 0.0
-    # weather.wind_intensity = 10.0
-    # weather.fog_density = 0.0
-    # weather.fog_distance = 0.0
-    # weather.fog_falloff = 0.0
-    # weather.wetness = 0.0
-    # weather.sun_azimuth_angle = 180.0
-    # weather.sun_altitude_angle = 70.0
-    # world.set_weather(weather)
+    from dynamic_weather import Weather
+    weather = Weather(world.get_weather())
+    speed_factor = 5.0  # 天候変化の速度係数
+    update_freq = 0.1 / speed_factor  # 天候更新頻度（秒）
 
     # === NPC車両スポーン ===
     vehicles = carla_util.spawn_npc_vehicles(
@@ -141,9 +132,14 @@ def main():
     try:
         duration_sec = TIME_DURATION
         num_frames = int(duration_sec / FIXED_DELTA_SECONDS)
+        elapsed_time = 0.0
         for frame_idx in range(num_frames):
             world.tick()  # シミュレーションを進める
-
+            elapsed_time += FIXED_DELTA_SECONDS
+            if elapsed_time > update_freq:
+                weather.tick(speed_factor * elapsed_time)
+                world.set_weather(weather.weather)
+                elapsed_time = 0.0
             for idx in range(NUM_CAMERA):
                 # === RGBカメラと深度カメラを取得 ===
                 camera = cameras[idx]
@@ -200,15 +196,11 @@ def main():
                                     points_2d_on_image.append(p)
                             yolo_bbox = camera_util.calculate_yolo_bbox(
                                 points_2d_on_image, IM_WIDTH, IM_HEIGHT)
-                            if yolo_bbox:
-                                # xmin, xmax, ymin, ymax = yolo_bbox
-                                # class_id = CLASS_MAPPING.get(target, -1)
-                                # size = (xmax - xmin) * (ymax - ymin)
-                                # if size < SIZE_THRESHOLD:
-                                #     continue
-                                # visible_bboxes.append(
-                                #     [class_id, xmin, xmax, ymin, ymax])
+                            if yolo_bbox is not None:
                                 x_center, y_center, width, height = yolo_bbox
+                                size = width*IM_WIDTH * height*IM_HEIGHT
+                                if size < SIZE_THRESHOLD:
+                                    continue
                                 class_id = camera_util.CLASS_MAPPING.get(
                                     target, -1)
                                 visible_bboxes.append(
@@ -231,12 +223,12 @@ def main():
                 cv2.imshow(display_name, bbox_image)
 
                 # 元画像、バウンディングボックス画像、ラベルを保存用キューに追加
-                # original_image_save_que = original_image_ques[idx]
-                # original_image_save_que.put(original_image)
-                # bbox_save_que = bbox_image_ques[idx]
-                # bbox_save_que.put(bbox_image)
-                # label_save_que = label_ques[idx]
-                # label_save_que.put(visible_bboxes)
+                original_image_save_que = original_image_ques[idx]
+                original_image_save_que.put(original_image)
+                bbox_save_que = bbox_image_ques[idx]
+                bbox_save_que.put(bbox_image)
+                label_save_que = label_ques[idx]
+                label_save_que.put(visible_bboxes)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 print("ユーザーによりシミュレーションが停止されました。")
                 break
@@ -245,18 +237,18 @@ def main():
         # === デバッグ用に画像を表示 ===
         # carla_util.show_queue_content(original_image_ques[0], "Original Images")
         # save_start = time.time()
-        # # === 画像を保存 ===
-        # print("オリジナル画像を保存中")
-        # output_original_dir = OUTPUT_IMG_DIR + f"/{MAP}/sunny/original"
-        # carla_util.save_images(original_image_ques,
-        #                        cameras, output_original_dir)
-        # print("バウンディングボックスを描画した画像を保存中")
-        # output_bbox_dir = OUTPUT_IMG_DIR + f"/{MAP}/sunny/bbox"
-        # carla_util.save_images(bbox_image_ques, cameras, output_bbox_dir)
-        # # === ラベルを保存 ===
-        # print("ラベルを保存中")
-        # output_label_dir = OUTPUT_LABEL_DIR + f"/{MAP}/sunny"
-        # carla_util.save_labels(label_ques, cameras, output_label_dir)
+        # === 画像を保存 ===
+        print("オリジナル画像を保存中")
+        output_original_dir = OUTPUT_IMG_DIR + f"/{MAP}/original"
+        carla_util.save_images(original_image_ques,
+                               cameras, output_original_dir)
+        print("バウンディングボックスを描画した画像を保存中")
+        output_bbox_dir = OUTPUT_IMG_DIR + f"/{MAP}/bbox"
+        carla_util.save_images(bbox_image_ques, cameras, output_bbox_dir)
+        # === ラベルを保存 ===
+        print("ラベルを保存中")
+        output_label_dir = OUTPUT_LABEL_DIR + f"/{MAP}"
+        carla_util.save_labels(label_ques, cameras, output_label_dir)
         # save_end = time.time()
 
         # === クリーンアップ ===

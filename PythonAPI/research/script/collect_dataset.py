@@ -106,7 +106,7 @@ def main():
     # === 天候の設定 ===
     from dynamic_weather import Weather
     weather = Weather(world.get_weather())
-    speed_factor = 10.0  # 天候変化の速度係数
+    speed_factor = 5.0  # 天候変化の速度係数
     update_freq = 0.1 / speed_factor  # 天候更新頻度（秒）
 
     # === NPC車両スポーン ===
@@ -148,6 +148,7 @@ def main():
     # === シミュレーション開始 ===
     ego_vehicle.set_autopilot(True)
     import time
+    idx = 0
     start = time.time()
     try:
         duration_sec = TIME_DURATION
@@ -160,7 +161,6 @@ def main():
                 weather.tick(speed_factor * elapsed_time)
                 world.set_weather(weather.weather)
                 elapsed_time = 0.0
-            idx = 0
             # === RGBカメラと深度カメラを取得 ===
             camera = cameras[idx]
             depth_camera = depth_cameras[idx]
@@ -204,7 +204,7 @@ def main():
                     ray = bbox.location - camera_location
                     if camera_forward_vector.dot(ray) < 0:
                         continue
-                    if bbox.location.distance(camera.get_location()) > 100.0:
+                    if bbox.location.distance(camera.get_location()) > VALID_DISTANCE:
                         continue
                     if is_visible_bbox(bbox, camera, K, world_to_camera, depth_map, eps=0.3):
                         verts = bbox.get_world_vertices(carla.Transform())
@@ -225,6 +225,9 @@ def main():
                             # visible_bboxes.append(
                             #     [class_id, xmin, xmax, ymin, ymax])
                             x_center, y_center, width, height = yolo_bbox
+                            size = width*IM_WIDTH * height*IM_HEIGHT
+                            if size < SIZE_THRESHOLD:
+                                continue
                             class_id = camera_util.CLASS_MAPPING.get(
                                 target, -1)
                             visible_bboxes.append(

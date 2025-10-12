@@ -145,25 +145,26 @@ if __name__ == "__main__":
     import sys
     debug = True if len(sys.argv) > 1 and (sys.argv[1] == 'debug') else False
     maps = [
-        'Town01_Opt',
-        'Town05_Opt',
-        'Town10HD_Opt'
+        "Town02",
+        # 'Town01_Opt',
+        # 'Town05_Opt',
+        # 'Town10HD_Opt'
     ]
     models = [
         "yolov8n",
-        "yolov5n",
-        "yolov11n"
+        # "yolov5n",
+        # "yolov11n"
     ]
 
     for map in maps:
         print(f"map: {map}")
         gt_dir = f'C:/CARLA_Latest/WindowsNoEditor/output/label/{map}/front'
-        for version in range(1, 4):
+        for version in range(1, len(models)+1):
             print(f"    version: {version}")
             for model in itertools.combinations(models, version):
                 print(f"        models: {model}")
                 det_dirs = [
-                    f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{map}/labels/{m}_results/front' for m in model]
+                    f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{map}/labels/{m}/front' for m in model]
 
                 ds = dataset.Dataset(gt_dir, det_dirs, version, debug)
                 # print(*ds.results[0][:3], sep='\n')

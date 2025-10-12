@@ -156,29 +156,50 @@ if __name__ == "__main__":
         # "yolov11n"
     ]
 
-    for map in maps:
-        print(f"map: {map}")
-        gt_dir = f'C:/CARLA_Latest/WindowsNoEditor/output/label/{map}/front'
-        for version in range(1, len(models)+1):
-            print(f"    version: {version}")
-            for model in itertools.combinations(models, version):
-                print(f"        models: {model}")
-                det_dirs = [
-                    f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{map}/labels/{m}/front' for m in model]
-
-                ds = dataset.Dataset(gt_dir, det_dirs, version, debug)
-                # print(*ds.results[0][:3], sep='\n')
-                # print("common_fp", *ds.common_fp()[:3], sep='\n')
-                # print("common_fn", *ds.common_fn()[:3], sep='\n')
-                # print("all_fp", * ds.all_fp()[:3], sep='\n')
-                # print("all_fn", * ds.all_fn()[:3], sep='\n')
-                print(f"            cov_od: {Evaluation(ds).cov_od()}")
-                print(
-                    f"            adaptive_cov_od: {Evaluation(ds).adaptive_cov_od()}")
-                print()
-                print(f"            cer_od: {Evaluation(ds).cer_od()}")
-                print(
-                    f"            adaptive_cer_od: {Evaluation(ds).adaptive_cer_od()} ")
-                print()
-                # # print(
-                # # f"            avg_accuracy: {Evaluation(ds).avg_accuracy()}")
+    import argparse
+    argparser = argparse.ArgumentParser(
+        description="Evaluate object detection results")
+    argparser.add_argument(
+        "--debug",
+        default=False,
+        action="store_true",
+        help="Enable debug mode"
+    )
+    argparser.add_argument(
+        "--map",
+        type=str,
+        default="Town01",
+        choices=["Town01", "Town02", "Town04", "Town05", "Town10HD"],
+        help="Map name: Town01, Town02, Town04, Town05, Town10HD"
+    )
+    argparser.add_argument(
+        "--models",
+        type=str,
+        nargs='+',
+        required=True,
+        choices=["yolov8n", "yolov11n", "yolov5n", "rtdetr"],
+    )
+    args = argparser.parse_args()
+    debug = args.debug
+    map = args.map
+    models = args.models
+    print(f"map: {map}")
+    gt_dir = f'C:/CARLA_Latest/WindowsNoEditor/output/label/{map}/front'
+    version = len(models)
+    print(f"models: {models}")
+    det_dirs = [
+        f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{map}/labels/{model}/front' for model in models]
+    ds = dataset.Dataset(gt_dir, det_dirs, version, debug)
+    # print(*ds.results[0][:3], sep='\n')
+    # print("common_fp", *ds.common_fp()[:3], sep='\n')
+    # print("common_fn", *ds.common_fn()[:3], sep='\n')
+    # print("all_fp", * ds.all_fp()[:3], sep='\n')
+    # print("all_fn", * ds.all_fn()[:3], sep='\n')
+    print(f"    cov_od: {Evaluation(ds).cov_od()}")
+    print(f"    adaptive_cov_od: {Evaluation(ds).adaptive_cov_od()}")
+    print()
+    print(f"    cer_od: {Evaluation(ds).cer_od()}")
+    print(f"    adaptive_cer_od: {Evaluation(ds).adaptive_cer_od()} ")
+    print()
+    # # print(
+    # # f"            avg_accuracy: {Evaluation(ds).avg_accuracy()}")

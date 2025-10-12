@@ -7,7 +7,7 @@ import os
 import utils.utils as utils
 
 
-class Yolo11nDetector(AbstractObjectDetector):
+class Yolov11nDetector(AbstractObjectDetector):
     def __init__(self):
         self.model = None
         self.load_model()

@@ -15,7 +15,7 @@ def setting_camera(world, bp_library, ego_vehicle, im_width, im_height, fov, num
         camera_bp.set_attribute('image_size_x', str(im_width))
         camera_bp.set_attribute('image_size_y', str(im_height))
         camera_bp.set_attribute('fov', str(fov))
-        # camera_bp.set_attribute('sensor_tick', '0.5s')
+        # camera_bp.set_attribute('sensor_tick', '1.0')
         if i == 0:
             camera_bp.set_attribute('role_name', 'front')
             camera_transform = carla.Transform(
@@ -46,6 +46,7 @@ def setting_depth_camera(world, bp_library, ego_vehicle, im_width, im_height, fo
     depth_bp.set_attribute('image_size_x', str(im_width))
     depth_bp.set_attribute('image_size_y', str(im_height))
     depth_bp.set_attribute('fov', str(fov))
+    # depth_bp.set_attribute('sensor_tick', '1.0')
     for i in range(num_camera):
         if i == 0:
             depth_transform = carla.Transform(

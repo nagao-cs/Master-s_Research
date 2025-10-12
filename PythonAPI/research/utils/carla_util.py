@@ -43,8 +43,10 @@ def spawn_npc_vehicles(world, bp, traffic_manager, spawn_points, car_ratio):
     num_spawn_points = len(spawn_points)
     vehicles = list()
     num_vehicles = int(num_spawn_points * car_ratio)
-    car_bps = [v for v in bp.filter(
-        'vehicle.*') if 'harley-davidson' not in v.tags and 'yamaha' not in v.tags and 'kawasaki' not in v.tags and 'crossbike' not in v.tags and 'omafiets' not in v.tags and 'vespa' not in v.tags]
+    car_bps = [
+        v for v in bp.filter(
+            'vehicle.*') if 'harley-davidson' not in v.tags and 'yamaha' not in v.tags and 'kawasaki' not in v.tags and 'crossbike' not in v.tags and 'omafiets' not in v.tags and 'vespa' not in v.tags]
+    # car_bps = [v for v in bp.filter('vehicle.*')]
     for i in range(num_vehicles):
         vehicle_bp = random.choice(car_bps)
         transform = spawn_points[i+1]
@@ -151,7 +153,6 @@ def save_images(image_queues, cameras, output_dir):
             image = image_queue.get()
             image_path = f"{save_dir}/{num_frame:06d}.png"
             cv2.imwrite(image_path, image)
-            cv2.imshow(camera_name, image)
             num_frame += 1
 
 
@@ -165,13 +166,12 @@ def save_labels(label_queues, cameras, output_dir):
         num_frame = 0
         while not label_queue.empty():
             labels = label_queue.get()
-            label_path = f"{save_dir}/{num_frame:06d}.csv"
+            label_path = f"{save_dir}/{num_frame:06d}.txt"
             with open(label_path, 'w') as f:
-                writer = csv.writer(f)
-                writer.writerow(
-                    ['class_id', 'xmin', 'xmax', 'ymin', 'ymax', 'dist'])
                 for label in labels:
-                    writer.writerow(label)
+                    class_id, x_center, y_center, width, height = label
+                    f.write(
+                        f"{class_id} {x_center} {y_center} {width} {height}\n")
             num_frame += 1
 
 

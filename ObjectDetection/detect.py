@@ -26,19 +26,30 @@ COCO_LABELS = [
 ]
 
 if __name__ == "__main__":
+    import argparse
+    argparser = argparse.ArgumentParser(
+        description="Object Detection on images")
+    argparser.add_argument(
+        "--model",
+        type=str,
+        default="yolov8n",
+        help="Model to use: yolov8n, yolo11n, ssd, fastrcnn, yolov5n, mobilenet, detr")
+    args = argparser.parse_args()
+    model_name = args.model
     conf_threshold = 0.25
-    # model = FastRCNNDetector()
-    # model = Yolo11nDetector()
-    # model = Yolov8nDetector()
-    # model = SSDDetector()
-    model = Yolov5nDetector()
-    # model = MobilenetDetector()
-    # model = DETRDetector()
+
+    match model_name:
+        case "yolov8n":
+            model = Yolov8nDetector()
+        case "yolo11n":
+            model = Yolo11nDetector()
+        case "yolov5n":
+            model = Yolov5nDetector()
+        case _:
+            print(f"Model {model_name} is not supported.")
     input_base_dir = "C:\CARLA_Latest\WindowsNoEditor\output\image"
     maps = [
-        "Town01_Opt",
-        "Town05_Opt",
-        "Town10HD_Opt"
+        "Town02"
     ]
     cameras = [
         "front",
@@ -63,7 +74,7 @@ if __name__ == "__main__":
                 bboxes = model.predict(image_path)
                 index = image_file.split('.')[0]
                 model.save_result(
-                    image_path, bboxes, map, camera, index
+                    image_path, bboxes, map, camera, index, model_name
                 )
                 # print(f"Processed {image_file} for camera {camera}")
     end = time.time()

@@ -59,6 +59,7 @@ class Yolo11nDetector(AbstractObjectDetector):
                     'width': width,
                     'height': height,
                     'confidence': conf,
-                    'label': label
+                    'label': label,
+                    'class_id': class_id
                 })
         return output

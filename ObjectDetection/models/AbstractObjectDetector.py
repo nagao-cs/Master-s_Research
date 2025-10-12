@@ -71,5 +71,6 @@ class AbstractObjectDetector:
                 height = bbox['height']
                 conf = bbox['confidence']
                 label = bbox['label']
+                class_id = bbox['class_id']
                 f.write(
-                    f"{label} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f} {conf:.6f}\n")
+                    f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f} {conf:.6f}\n")

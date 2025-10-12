@@ -6,8 +6,7 @@ from models.Yolov11 import Yolov11nDetector
 # from models.SSD import SSDDetector
 # from models.FastRCNN import FastRCNNDetector
 from models.Yolov5 import Yolov5nDetector
-# from models.mobilenet import MobilenetDetector
-# from models.DETR import DETRDetector
+from models.rtDETR import RTDETRDetector
 
 COCO_LABELS = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus",
@@ -52,9 +51,14 @@ if __name__ == "__main__":
             model = Yolov11nDetector()
         case "yolov5n":
             model = Yolov5nDetector()
+        case "rtdetr":
+            model = RTDETRDetector()
         case _:
-            print(f"Model {model_name} is not supported.")
-
+            supported_models = ["yolov8n", "yolov11n", "yolov5n", "rtdetr"]
+            raise ValueError(
+                f"モデル '{model_name}' はサポートされていません。\n"
+                f"サポートされているモデル: {', '.join(supported_models)}"
+            )
     input_base_dir = "C:\CARLA_Latest\WindowsNoEditor\output\image"
     cameras = [
         "front",

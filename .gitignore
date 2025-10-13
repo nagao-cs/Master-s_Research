@@ -29,4 +29,9 @@ __pycache__/
 /進捗報告
 /Evaluation/*.pkl
 /detection_env
+/new_detection_env
+/raw_dataset/dataset
+/raw_dataset/images
+/raw_dataset/labels
+/raw_dataset/runs
 /国際学会

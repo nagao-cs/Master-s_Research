@@ -2,6 +2,9 @@ import os
 import utils
 from pprint import pprint
 
+IM_WIDTH = 800
+IM_HEIGHT = 600
+
 
 def classify(gt_dir, det_dir) -> list:
     """
@@ -76,26 +79,26 @@ def get_gt(gt_file_path) -> dict:
     gt = dict()
     with open(gt_file_path, 'r') as gt_file:
         lines = gt_file.readlines()
-        for line in lines[1:]:
+        for line in lines:
             if not line.strip():
                 continue
-            parts = line.strip().split(',')
+            parts = line.strip().split(' ')
             class_id = utils.class_Map.get((int(parts[0])), -1)  # -1（無視するクラス）
             if class_id == -1:
                 continue
             # class_id = int(parts[0])
-            xmin = float(parts[1])
-            xmax = float(parts[2])
-            ymin = float(parts[3])
-            ymax = float(parts[4])
+            x_center = float(parts[1])
+            y_center = float(parts[2])
+            width = float(parts[3])
+            height = float(parts[4])
             distance = 0.0  # 仮の値、必要に応じて計算する
-            size = (xmax-xmin) * (ymax-ymin)
+            size = width * height * IM_WIDTH * IM_HEIGHT
             if size < utils.SIZE_THRESHOLD:
                 continue
             if class_id not in gt:
                 gt[class_id] = list()
             # 仮の値、必要に応じて計算する
-            gt[class_id].append((xmin, xmax, ymin, ymax, distance))
+            gt[class_id].append((x_center, y_center, width, height, distance))
 
     return gt
 
@@ -107,26 +110,27 @@ def get_detections(det_file_path) -> dict:
     detections = dict()
     with open(det_file_path, 'r') as det_file:
         lines = det_file.readlines()
-        for line in lines[1:]:
+        for line in lines:
             if not line.strip():
                 continue
-            parts = line.strip().split(',')
+            parts = line.strip().split(' ')
             class_id = utils.class_Map.get((int(parts[0])), -1)  # -1（無視するクラス）
             if class_id == -1:
                 continue
             # class_id = int(parts[0])
-            xmin = float(parts[1])
-            xmax = float(parts[2])
-            ymin = float(parts[3])
-            ymax = float(parts[4])
+            x_center = float(parts[1])
+            y_center = float(parts[2])
+            width = float(parts[3])
+            height = float(parts[4])
             confidence = float(parts[5])
-            size = (xmax-xmin) * (ymax-ymin)
+            size = width * height * IM_WIDTH * IM_HEIGHT
             if size < utils.SIZE_THRESHOLD:
                 continue
             if confidence < utils.CONF_THRESHOLD:
                 continue
             if class_id not in detections:
                 detections[class_id] = list()
-            detections[class_id].append((xmin, xmax, ymin, ymax, confidence))
+            detections[class_id].append(
+                (x_center, y_center, width, height, confidence))
 
     return detections

@@ -22,7 +22,7 @@ def classify(gt_dir, det_dir) -> list:
         det = get_detections(det_file)
 
         # クラスごとに処理
-        for class_id in gt:
+        for class_id in gt.keys():
             gt_boxes = gt[class_id]
             det_boxes = det.get(class_id, [])
 

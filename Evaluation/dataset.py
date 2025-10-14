@@ -12,11 +12,25 @@ class Dataset:
                 self.results[version] = self.results[version][:10]
         self.num_frame = len(self.results[0])
         self.num_gt_list = self.num_gt()
+        self.num_detection_dict = self.num_detections()
         self.common_fp_list = self.common_fp()
         self.common_fn_list = self.common_fn()
         self.all_fp_list = self.all_fp()
         self.all_fn_list = self.all_fn()
         self.total_obj_list = self.total_obj()
+
+    def num_detections(self):
+        num_detection_dict = {version: list()
+                              for version in range(self.num_version)}
+        for version in range(self.num_version):
+            for frame in range(self.num_frame):
+                num_tp = sum(len(boxes)
+                             for boxes in self.results[0][frame]['TP'].values())
+                num_fp = sum(len(boxes)
+                             for boxes in self.results[0][frame]['FP'].values())
+                num_detection_dict[version].append(num_tp + num_fp)
+
+        return num_detection_dict
 
     def num_gt(self) -> list[int]:
         num_gt = list()

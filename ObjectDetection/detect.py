@@ -31,14 +31,18 @@ if __name__ == "__main__":
     argparser.add_argument(
         "--model",
         type=str,
-        default="yolov8n",
-        help="Model to use: yolov8n, yolo11n, ssd, fastrcnn, yolov5n, mobilenet, detr")
+        required=True,
+        choices=["yolov8n", "yolov5n", "yolov11n", "rtdetr", "ssd"],
+        help="Model to use: yolov8n, yolo11n, ssd, fastrcnn, yolov5n, mobilenet, detr",
+    )
     argparser.add_argument(
         "--map",
         type=str,
-        default="Town01",
-        help="Map name: Town01, Town02, etc."
+        choices=["Town01", "Town02", "Town03", "Town04", "Town05", "Town10HD"],
+        help="Map name: Town01, Town02, etc.",
+        required=True
     )
+
     args = argparser.parse_args()
     model_name = args.model
     map_name = args.map

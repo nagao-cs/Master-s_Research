@@ -10,9 +10,9 @@ class Evaluation:
         self.dataset = dataset
 
     def cov_od(self):
-        total_objs = self.dataset.total_obj()
-        common_fps = self.dataset.common_fp()
-        common_fns = self.dataset.common_fn()
+        total_objs = self.dataset.total_obj_list
+        common_fps = self.dataset.common_fp_list
+        common_fns = self.dataset.common_fn_list
         cov_od = 0.0
         for frame in range(self.dataset.num_frame):
             frame_obj = total_objs[frame]
@@ -32,16 +32,18 @@ class Evaluation:
         return cov_od
 
     def cer_od(self):
-        total_objs = self.dataset.total_obj()
-        all_fps = self.dataset.all_fp()
-        all_fns = self.dataset.all_fn()
+        total_objs = self.dataset.total_obj_list
+        all_fps = self.dataset.all_fp_list
+        all_fns = self.dataset.all_fn_list
         cer_od = 0.0
+        avg_all_fp = 0
         for frame in range(self.dataset.num_frame):
             frame_obj = total_objs[frame]
             frame_all_fp = all_fps[frame]
             frame_all_fn = all_fns[frame]
             num_fp = sum(len(bboxes) for bboxes in frame_all_fp.values())
             num_fn = sum(len(bboxes) for bboxes in frame_all_fn.values())
+            avg_all_fp += num_fp
             cer_od += (num_fp + num_fn) / frame_obj if frame_obj > 0 else 0
             if frame_obj == 0 and (num_fp > 0 or num_fn > 0):
                 print(
@@ -49,9 +51,10 @@ class Evaluation:
             # print(
             #     f"frame: {frame}, obj: {frame_obj}, fp: {num_fp}, fn: {num_fn}, cer_od: {(num_fp + num_fn) / frame_obj if frame_obj > 0 else 0}")
         cer_od = 1 - (cer_od/self.dataset.num_frame)
+        # print(f"avg_all_fp = {avg_all_fp/self.dataset.num_frame}")
         return cer_od
 
-    def adaptive_cov_od(self):
+    def gt_based_adaptive_cov_od(self):
         total_objs = self.dataset.total_obj_list
         common_fps = self.dataset.common_fp_list
         common_fns = self.dataset.common_fn_list
@@ -82,15 +85,16 @@ class Evaluation:
                     (num_gt + num_fp) if (num_gt + num_fp) > 0 else 0
                 adaptive_conut += 1
         adaptive_cov_od = 1 - (adaptive_cov_od/self.dataset.num_frame)
-        # print(f"adaptive_conut: {adaptive_conut}")
+        print(f"adaptive_conut: {adaptive_conut}")
         return adaptive_cov_od
 
-    def adaptive_cer_od(self):
-        total_objs = self.dataset.total_obj()
-        all_fps = self.dataset.all_fp()
-        all_fns = self.dataset.all_fn()
+    def gt_based_adaptive_cer_od(self):
+        total_objs = self.dataset.total_obj_list
+        all_fps = self.dataset.all_fp_list
+        all_fns = self.dataset.all_fn_list
         adaptive_cer_od = 0.0
         adaptive_conut = 0
+        avg_all_fp = 0
         for frame in range(self.dataset.num_frame):
             num_gt = self.dataset.num_gt_list[frame]
 
@@ -115,6 +119,8 @@ class Evaluation:
                 adaptive_cer_od += (num_fp + num_fn) / \
                     (num_gt + num_fp) if (num_gt + num_fp) > 0 else 0
                 adaptive_conut += 1
+            avg_all_fp += num_fp
+        # print(f"avg_all_fp:{avg_all_fp/self.dataset.num_frame}")
         adaptive_cer_od = 1 - (adaptive_cer_od/self.dataset.num_frame)
         # print(f"adaptive_conut: {adaptive_conut}")
         return adaptive_cer_od
@@ -138,23 +144,43 @@ class Evaluation:
         avg_accuracy = total_accuracy / self.dataset.num_frame
         return avg_accuracy
 
+    def detect_based_adaptive_cov_od(self, adaptive_threshold):
+        total_objs = self.dataset.total_obj_list
+        common_fps = self.dataset.common_fp_list
+        common_fns = self.dataset.common_fn_list
+        adaptive_cov_od = 0.0
+        adaptive_conut = 0
+        for frame in range(self.dataset.num_frame):
+            num_gt = self.dataset.num_gt_list[frame]
+            num_detection = self.dataset.num_detection_dict[0][frame]
+
+            if num_detection >= adaptive_threshold:
+                frame_obj = total_objs[frame]
+                frame_common_fp = common_fps[frame]
+                frame_common_fn = common_fns[frame]
+                num_fp = sum(len(bboxes)
+                             for bboxes in frame_common_fp.values())
+                num_fn = sum(len(bboxes)
+                             for bboxes in frame_common_fn.values())
+                adaptive_cov_od += (num_fp + num_fn) / \
+                    frame_obj if frame_obj > 0 else 0
+            else:
+                num_fp = sum(len(bboxes)
+                             for bboxes in common_fps[frame].values())
+                num_fn = sum(len(bboxes)
+                             for bboxes in common_fns[frame].values())
+                adaptive_cov_od += (num_fp + num_fn) / \
+                    (num_gt + num_fp) if (num_gt + num_fp) > 0 else 0
+                adaptive_conut += 1
+        adaptive_cov_od = 1 - (adaptive_cov_od/self.dataset.num_frame)
+        print(f"    detection_based adaptive_conut: {adaptive_conut}")
+        return adaptive_cov_od
+
 
 if __name__ == "__main__":
     # main()
-    import itertools
     import sys
     debug = True if len(sys.argv) > 1 and (sys.argv[1] == 'debug') else False
-    maps = [
-        "Town02",
-        # 'Town01_Opt',
-        # 'Town05_Opt',
-        # 'Town10HD_Opt'
-    ]
-    models = [
-        "yolov8n",
-        # "yolov5n",
-        # "yolov11n"
-    ]
 
     import argparse
     argparser = argparse.ArgumentParser(
@@ -168,9 +194,10 @@ if __name__ == "__main__":
     argparser.add_argument(
         "--map",
         type=str,
-        default="Town01",
-        choices=["Town01", "Town02", "Town04", "Town05", "Town10HD"],
-        help="Map name: Town01, Town02, Town04, Town05, Town10HD"
+        choices=["Town01", "Town02", "Town03",
+                 "Town04", "Town05", "Town10HD_Opt"],
+        help="Map name: Town01, Town02, Town04, Town05, Town10HD",
+        required=True
     )
     argparser.add_argument(
         "--models",
@@ -179,10 +206,18 @@ if __name__ == "__main__":
         required=True,
         choices=["yolov8n", "yolov11n", "yolov5n", "rtdetr"],
     )
+    argparser.add_argument(
+        "--adaptive",
+        "-a",
+        type=int,
+        default=utils.ADAPTIVE_THRESHOLD,
+        required=False
+    )
     args = argparser.parse_args()
     debug = args.debug
     map = args.map
     models = args.models
+    adaptive_threshold = args.adaptive
     print(f"map: {map}")
     gt_dir = f'C:/CARLA_Latest/WindowsNoEditor/output/label/{map}/front'
     version = len(models)
@@ -193,13 +228,17 @@ if __name__ == "__main__":
     # print(*ds.results[0][:3], sep='\n')
     # print("common_fp", *ds.common_fp()[:3], sep='\n')
     # print("common_fn", *ds.common_fn()[:3], sep='\n')
-    # print("all_fp", * ds.all_fp()[:3], sep='\n')
-    # print("all_fn", * ds.all_fn()[:3], sep='\n')
+    # print("all_fp", * ds.all_fp_list[:3], sep='\n')
+    # print("all_fn", * ds.all_fn()[_list], sep='\n')
     print(f"    cov_od: {Evaluation(ds).cov_od()}")
-    print(f"    adaptive_cov_od: {Evaluation(ds).adaptive_cov_od()}")
+    print(
+        f"    gt_based_adaptive_cov_od: {Evaluation(ds).gt_based_adaptive_cov_od()}")
+    print(
+        f"    detection_based_adaptive_cov_od: {Evaluation(ds).detect_based_adaptive_cov_od(adaptive_threshold)}")
     print()
     print(f"    cer_od: {Evaluation(ds).cer_od()}")
-    print(f"    adaptive_cer_od: {Evaluation(ds).adaptive_cer_od()} ")
+    print(
+        f"    gt_based_adaptive_cer_od: {Evaluation(ds).gt_based_adaptive_cer_od()} ")
     print()
     # # print(
     # # f"            avg_accuracy: {Evaluation(ds).avg_accuracy()}")

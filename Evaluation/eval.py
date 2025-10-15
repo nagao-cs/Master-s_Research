@@ -9,6 +9,9 @@ class Evaluation:
     def __init__(self, dataset):
         self.dataset = dataset
 
+    def pricision(self):
+        pass
+
     def cov_od(self):
         total_objs = self.dataset.total_obj_list
         common_fps = self.dataset.common_fp_list
@@ -22,12 +25,6 @@ class Evaluation:
             num_fn = sum(len(bboxes) for bboxes in frame_common_fn.values())
             cov_od += ((num_fp + num_fn) /
                        frame_obj) if frame_obj > 0 else 0
-
-            if frame_obj == 0 and (num_fp > 0 or num_fn > 0):
-                print(
-                    f"frame: {frame}, obj: {frame_obj}, fp: {num_fp}, fn: {num_fn}")
-            # print(
-            #     f"frame: {frame}, obj: {frame_obj}, fp: {num_fp}, fn: {num_fn}, cov_od: {(num_fp + num_fn) / frame_obj if frame_obj > 0 else 0}")
         cov_od = 1 - (cov_od/self.dataset.num_frame)
         return cov_od
 
@@ -45,11 +42,7 @@ class Evaluation:
             num_fn = sum(len(bboxes) for bboxes in frame_all_fn.values())
             avg_all_fp += num_fp
             cer_od += (num_fp + num_fn) / frame_obj if frame_obj > 0 else 0
-            if frame_obj == 0 and (num_fp > 0 or num_fn > 0):
-                print(
-                    f"frame: {frame}, obj: {frame_obj}, fp: {num_fp}, fn: {num_fn}")
-            # print(
-            #     f"frame: {frame}, obj: {frame_obj}, fp: {num_fp}, fn: {num_fn}, cer_od: {(num_fp + num_fn) / frame_obj if frame_obj > 0 else 0}")
+
         cer_od = 1 - (cer_od/self.dataset.num_frame)
         # print(f"avg_all_fp = {avg_all_fp/self.dataset.num_frame}")
         return cer_od
@@ -59,7 +52,7 @@ class Evaluation:
         common_fps = self.dataset.common_fp_list
         common_fns = self.dataset.common_fn_list
         adaptive_cov_od = 0.0
-        adaptive_conut = 0
+        count_inference = 0
         for frame in range(self.dataset.num_frame):
             num_gt = self.dataset.num_gt_list[frame]
 
@@ -73,19 +66,15 @@ class Evaluation:
                              for bboxes in frame_common_fn.values())
                 adaptive_cov_od += (num_fp + num_fn) / \
                     frame_obj if frame_obj > 0 else 0
-                if frame_obj == 0 and (num_fp > 0 or num_fn > 0):
-                    print(
-                        f"frame: {frame}, obj: {frame_obj}, fp: {num_fp}, fn: {num_fn}")
+                count_inference += self.dataset.num_version
             else:
-                num_fp = sum(len(bboxes)
-                             for bboxes in common_fps[frame].values())
-                num_fn = sum(len(bboxes)
-                             for bboxes in common_fns[frame].values())
+                num_fp = len(self.dataset.fp_detection(version=0, frame=frame))
+                num_fn = len(self.dataset.fn_detection(version=0, frame=frame))
                 adaptive_cov_od += (num_fp + num_fn) / \
                     (num_gt + num_fp) if (num_gt + num_fp) > 0 else 0
-                adaptive_conut += 1
+                count_inference += 1
         adaptive_cov_od = 1 - (adaptive_cov_od/self.dataset.num_frame)
-        print(f"adaptive_conut: {adaptive_conut}")
+        print(f"        gt-based 推論回数: {count_inference}")
         return adaptive_cov_od
 
     def gt_based_adaptive_cer_od(self):
@@ -93,7 +82,7 @@ class Evaluation:
         all_fps = self.dataset.all_fp_list
         all_fns = self.dataset.all_fn_list
         adaptive_cer_od = 0.0
-        adaptive_conut = 0
+        count_inference = 0
         avg_all_fp = 0
         for frame in range(self.dataset.num_frame):
             num_gt = self.dataset.num_gt_list[frame]
@@ -108,17 +97,13 @@ class Evaluation:
                              for bboxes in frame_all_fn.values())
                 adaptive_cer_od += (num_fp + num_fn) / \
                     frame_obj if frame_obj > 0 else 0
-                if frame_obj == 0 and (num_fp > 0 or num_fn > 0):
-                    print(
-                        f"frame: {frame}, obj: {frame_obj}, fp: {num_fp}, fn: {num_fn}")
+                count_inference += self.dataset.num_version
             else:
-                num_fp = sum(len(bboxes)
-                             for bboxes in all_fps[frame].values())
-                num_fn = sum(len(bboxes)
-                             for bboxes in all_fns[frame].values())
+                num_fp = len(self.dataset.fp_detection(version=0, frame=frame))
+                num_fn = len(self.dataset.fn_detection(version=0, frame=frame))
                 adaptive_cer_od += (num_fp + num_fn) / \
                     (num_gt + num_fp) if (num_gt + num_fp) > 0 else 0
-                adaptive_conut += 1
+                count_inference += 1
             avg_all_fp += num_fp
         # print(f"avg_all_fp:{avg_all_fp/self.dataset.num_frame}")
         adaptive_cer_od = 1 - (adaptive_cer_od/self.dataset.num_frame)
@@ -149,7 +134,7 @@ class Evaluation:
         common_fps = self.dataset.common_fp_list
         common_fns = self.dataset.common_fn_list
         adaptive_cov_od = 0.0
-        adaptive_conut = 0
+        count_inference = 0
         for frame in range(self.dataset.num_frame):
             num_gt = self.dataset.num_gt_list[frame]
             num_detection = self.dataset.num_detection_dict[0][frame]
@@ -164,16 +149,83 @@ class Evaluation:
                              for bboxes in frame_common_fn.values())
                 adaptive_cov_od += (num_fp + num_fn) / \
                     frame_obj if frame_obj > 0 else 0
+                count_inference += self.dataset.num_version
             else:
-                num_fp = sum(len(bboxes)
-                             for bboxes in common_fps[frame].values())
-                num_fn = sum(len(bboxes)
-                             for bboxes in common_fns[frame].values())
+                num_fp = len(self.dataset.fp_detection(version=0, frame=frame))
+                num_fn = len(self.dataset.fn_detection(version=0, frame=frame))
                 adaptive_cov_od += (num_fp + num_fn) / \
                     (num_gt + num_fp) if (num_gt + num_fp) > 0 else 0
-                adaptive_conut += 1
+                count_inference += 1
         adaptive_cov_od = 1 - (adaptive_cov_od/self.dataset.num_frame)
-        print(f"    detection_based adaptive_conut: {adaptive_conut}")
+        print(
+            f"        detection_based 推論回数: {count_inference} (num_obj_threshold={adaptive_threshold})")
+        return adaptive_cov_od
+
+    def detection_based_adaptive_cer_od(self, adaptive_threshold):
+        total_objs = self.dataset.total_obj_list
+        all_fps = self.dataset.all_fp_list
+        all_fns = self.dataset.all_fn_list
+        adaptive_cer_od = 0.0
+        count_inference = 0
+        for frame in range(self.dataset.num_frame):
+            num_gt = self.dataset.num_gt_list[frame]
+            num_detection = self.dataset.num_detection_dict[0][frame]
+            if num_detection >= adaptive_threshold:
+                frame_obj = total_objs[frame]
+                frame_all_fp = all_fps[frame]
+                frame_all_fn = all_fns[frame]
+                num_fp = sum(len(bboxes)
+                             for bboxes in frame_all_fp.values())
+                num_fn = sum(len(bboxes)
+                             for bboxes in frame_all_fn.values())
+                adaptive_cer_od += (num_fp + num_fn) / \
+                    frame_obj if frame_obj > 0 else 0
+                count_inference += self.dataset.num_version
+            else:
+                num_fp = len(self.dataset.fp_detection(version=0, frame=frame))
+                num_fn = len(self.dataset.fn_detection(version=0, frame=frame))
+                adaptive_cer_od += (num_fp + num_fn) / \
+                    (num_gt + num_fp) if (num_gt + num_fp) > 0 else 0
+                count_inference += 1
+        adaptive_cer_od = 1 - (adaptive_cer_od/self.dataset.num_frame)
+        return adaptive_cer_od
+
+    def conf_adaptive_cov_od(self, k, conf_threshold):
+        total_objs = self.dataset.total_obj_list
+        common_fps = self.dataset.common_fp_list
+        common_fns = self.dataset.common_fn_list
+        adaptive_cov_od = 0.0
+        count_inference = 0
+        for frame in range(self.dataset.num_frame):
+            num_gt = self.dataset.num_gt_list[frame]
+            topK_detection = self.dataset.topK_detection(
+                version=0, frame=frame, k=k)
+            if len(topK_detection) > 0:
+                avg_conf = sum(box[4]
+                               for box in topK_detection) / len(topK_detection)
+            else:
+                avg_conf = 1
+
+            if avg_conf < conf_threshold:
+                frame_obj = total_objs[frame]
+                frame_common_fp = common_fps[frame]
+                frame_common_fn = common_fns[frame]
+                num_fp = sum(len(bboxes)
+                             for bboxes in frame_common_fp.values())
+                num_fn = sum(len(bboxes)
+                             for bboxes in frame_common_fn.values())
+                adaptive_cov_od += (num_fp + num_fn) / \
+                    frame_obj if frame_obj > 0 else 0
+                count_inference += self.dataset.num_version
+            else:
+                num_fp = len(self.dataset.fp_detection(version=0, frame=frame))
+                num_fn = len(self.dataset.fn_detection(version=0, frame=frame))
+                adaptive_cov_od += (num_fp + num_fn) / \
+                    (num_gt + num_fp) if (num_gt + num_fp) > 0 else 0
+                count_inference += 1
+        adaptive_cov_od = 1 - (adaptive_cov_od/self.dataset.num_frame)
+        print(
+            f"        topK conf 推論回数: {count_inference} (k={k}, conf_threshold={conf_threshold})")
         return adaptive_cov_od
 
 
@@ -207,17 +259,28 @@ if __name__ == "__main__":
         choices=["yolov8n", "yolov11n", "yolov5n", "rtdetr"],
     )
     argparser.add_argument(
-        "--adaptive",
-        "-a",
+        "--numobj",
         type=int,
         default=utils.ADAPTIVE_THRESHOLD,
         required=False
+    )
+    argparser.add_argument(
+        "--k",
+        type=int,
+        default=5
+    )
+    argparser.add_argument(
+        "--conf",
+        type=float,
+        default=0.7,
     )
     args = argparser.parse_args()
     debug = args.debug
     map = args.map
     models = args.models
-    adaptive_threshold = args.adaptive
+    numobj_threshold = args.numobj
+    k = args.k
+    conf_threshold = args.conf
     print(f"map: {map}")
     gt_dir = f'C:/CARLA_Latest/WindowsNoEditor/output/label/{map}/front'
     version = len(models)
@@ -234,11 +297,15 @@ if __name__ == "__main__":
     print(
         f"    gt_based_adaptive_cov_od: {Evaluation(ds).gt_based_adaptive_cov_od()}")
     print(
-        f"    detection_based_adaptive_cov_od: {Evaluation(ds).detect_based_adaptive_cov_od(adaptive_threshold)}")
+        f"    detection_based_adaptive_cov_od: {Evaluation(ds).detect_based_adaptive_cov_od(numobj_threshold)}")
+    print(
+        f"    topK conf cov_od: {Evaluation(ds).conf_adaptive_cov_od(k, conf_threshold)}")
     print()
     print(f"    cer_od: {Evaluation(ds).cer_od()}")
     print(
         f"    gt_based_adaptive_cer_od: {Evaluation(ds).gt_based_adaptive_cer_od()} ")
+    print(
+        f"    detection_based_adaptive_cer_od: {Evaluation(ds).detection_based_adaptive_cer_od(numobj_threshold)}")
     print()
     # # print(
     # # f"            avg_accuracy: {Evaluation(ds).avg_accuracy()}")

@@ -153,7 +153,6 @@ if __name__ == "__main__":
     gt_directory = f"C:/CARLA_Latest/WindowsNoEditor/output/label/{map}/front"
     if len(models) == 1:
         det_directory = f"C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{map}/labels/{models[0]}/front"
-
     else:
         det_directory = f"C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/integrated_output/{map}_{'_'.join(models)}"
     precision, recall = calculate_precision_recall(gt_directory, det_directory)

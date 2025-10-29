@@ -1,6 +1,6 @@
 from typing import List, Dict
 import numpy as np
-from detection import Detection
+from .detection import Detection
 
 
 class DetectionIntegrator:

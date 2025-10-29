@@ -19,6 +19,31 @@ class Dataset:
         self.all_fn_list = self.all_fn()
         self.total_obj_list = self.total_obj()
 
+    def topK_detection(self, version, frame, k):
+        detections = list()
+        for boxes in self.results[version][frame]['TP'].values():
+            for box in boxes:
+                detections.append(box)
+        for boxes in self.results[version][frame]['FP'].values():
+            for box in boxes:
+                detections.append(box)
+        detections.sort(key=lambda box: box[4], reverse=True)
+        return detections[:k]
+
+    def fp_detection(self, version, frame):
+        fp_detection = list()
+        for boxes in self.results[version][frame]['FP'].values():
+            for box in boxes:
+                fp_detection.append(box)
+        return fp_detection
+
+    def fn_detection(self, version, frame):
+        fn_detection = list()
+        for boxes in self.results[version][frame]['FN'].values():
+            for box in boxes:
+                fn_detection.append(box)
+        return fn_detection
+
     def num_detections(self):
         num_detection_dict = {version: list()
                               for version in range(self.num_version)}

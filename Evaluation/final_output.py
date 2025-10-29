@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 import numpy as np
-from integrate import DetectionIntegrator
-from detection import Detection
-import utils
+from integrate.integrate import DetectionIntegrator
+from integrate.detection import Detection
+from utils import utils
 
 
 class Output:
@@ -120,6 +120,7 @@ def main():
     debug = args.debug
     map = args.map
     models = args.models
+    models.sort()
     print(f"map: {map}")
     gt_dir = f'C:/CARLA_Latest/WindowsNoEditor/output/label/{map}/front'
     version = len(models)

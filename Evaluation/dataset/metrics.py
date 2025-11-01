@@ -1,4 +1,4 @@
-class DetectionStats:
+class DetectionMetrics:
     def __init__(self):
         self.metrics = dict()  # 指標と関数のマッピング
         self.counters = {
@@ -46,8 +46,20 @@ class DetectionStats:
                     self.counters['union_fn'][frame_idx]) / self.counters['total_instances'][frame_idx] if self.counters['total_instances'][frame_idx] > 0 else 0.0
         return 1 - (UoE / self.counters['num_frames'])
 
-    def adaptive_covod(self):
-        pass
+    def precision(self):
+        total_tp = sum(self.counters['total_instances'])
+        total_fp = sum(self.counters['union_fp'])
+        return total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0.0
+
+    def recall(self):
+        total_tp = sum(self.counters['total_instances'])
+        total_fn = sum(self.counters['union_fn'])
+        return total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0.0
+
+    def f1_score(self):
+        prec = self.precision()
+        rec = self.recall()
+        return 2 * (prec * rec) / (prec + rec) if (prec + rec) > 0 else 0.0
 
     def compute(self):
         results = dict()

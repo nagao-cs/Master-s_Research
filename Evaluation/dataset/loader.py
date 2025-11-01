@@ -51,9 +51,6 @@ class DetectionResultLoader:
         return gt
 
     def _get_detections(self, det_path) -> dict:
-        """
-        det_file_path: Path to a detection results file
-        """
         detections = dict()
         with open(det_path, 'r') as det_file:
             lines = det_file.readlines()

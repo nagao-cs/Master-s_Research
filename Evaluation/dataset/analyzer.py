@@ -41,8 +41,6 @@ class DetectionAnalyzer:
                             for curr_box in current_errors[class_id]:
                                 if curr_box in used_boxes:
                                     continue
-                                print("base_box", base_box)
-                                print("curr_box", curr_box)
                                 iou = utils.iou(base_box, curr_box)
                                 if iou > best_iou:
                                     best_iou = iou

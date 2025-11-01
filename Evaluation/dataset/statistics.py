@@ -46,6 +46,9 @@ class DetectionStats:
                     self.counters['union_fn'][frame_idx]) / self.counters['total_instances'][frame_idx] if self.counters['total_instances'][frame_idx] > 0 else 0.0
         return 1 - (UoE / self.counters['num_frames'])
 
+    def adaptive_covod(self):
+        pass
+
     def compute(self):
         results = dict()
         for name, func in self.metrics.items():

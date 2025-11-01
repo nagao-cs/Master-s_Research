@@ -5,7 +5,9 @@ class DetectionAnalyzer:
     def __init__(self, iou_th: float):
         self.iou_th = iou_th
 
-    def analyze_frame(self, gt: dict, dets: dict[dict]) -> dict:
+    def analyze_frame(self, gt: dict, dets: dict[dict], mode: str) -> dict:
+        if mode == "standard":
+            dets = {0: dets[0]}  # 標準モードでは最初のバージョンのみを使用
         classified_results = self._classify_frame(
             gt, dets)  # これでdetsのバージョン数が切り替わっても使える
         intersection_errors = self._intersection_of_errors(classified_results)

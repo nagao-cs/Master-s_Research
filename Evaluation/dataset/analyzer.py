@@ -139,7 +139,7 @@ class DetectionAnalyzer:
                     if i in used_gt:
                         continue
                     iou = utils.iou(gt_box, det_box)
-                    if iou >= utils.IoU_THRESHOLD and iou > best_iou:
+                    if iou >= self.iou_th and iou > best_iou:
                         best_iou = iou
                         best_gt_idx = i
 

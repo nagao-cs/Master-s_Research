@@ -21,58 +21,6 @@ class DetectionResultLoader:
                     for version in range(self.num_version)}
             yield frame_idx, gt, dets
 
-    def _classify_frame(self, gt_path, det_paths) -> dict[dict]:
-        frame_results = dict()
-        # 各バージョンの検出結果を分類
-        gt = self._get_gt(gt_path)
-        for version, det_path in enumerate(det_paths):
-            det = self._get_detections(det_path)
-            frame_results[version] = self._classify(gt, det)
-        return frame_results
-
-    def _classify(self, gt, det) -> dict:
-        det_results = {'TP': dict(), 'FP': dict(), 'FN': dict()}
-        # クラスごとに処理
-        for class_id in gt.keys():
-            gt_boxes = gt[class_id]
-            det_boxes = det.get(class_id, [])
-
-            if class_id not in det_results['TP']:
-                det_results['TP'][class_id] = list()
-            if class_id not in det_results['FN']:
-                det_results['FN'][class_id] = list()
-            if class_id not in det_results['FP']:
-                det_results['FP'][class_id] = list()
-
-            # GTとDetectionのマッチング
-            used_gt = set()  # マッチ済みのGTを記録
-
-            for det_box in det_boxes:
-                best_iou = 0.0
-                best_gt_idx = -1
-
-                # 未使用のGTと最もIoUが高いものを探す
-                for i, gt_box in enumerate(gt_boxes):
-                    if i in used_gt:
-                        continue
-                    iou = utils.iou(gt_box, det_box)
-                    if iou >= utils.IoU_THRESHOLD and iou > best_iou:
-                        best_iou = iou
-                        best_gt_idx = i
-
-                # マッチング結果に基づいて分類
-                if best_gt_idx >= 0:
-                    det_results['TP'][class_id].append(det_box)
-                    used_gt.add(best_gt_idx)
-                else:
-                    det_results['FP'][class_id].append(det_box)
-
-            # 未使用のGTをFNとして追加
-            for i, gt_box in enumerate(gt_boxes):
-                if i not in used_gt:
-                    det_results['FN'][class_id].append(gt_box)
-        return det_results
-
     def _get_gt(self, gt_path) -> dict:
         gt = dict()
         with open(gt_path, 'r') as gt_file:

@@ -22,49 +22,58 @@ class DetectionAnalyzer:
         intersection_errors = {'FP': dict(), 'FN': dict()}
         for error_type in ['FP', 'FN']:
             for version, classified_det in classified_dets.items():
-                if version == 0:
-                    base_errors = classified_det[error_type]
-                    for class_id in base_errors.keys():
-                        intersection_errors[error_type][class_id] = list()
-                        for boxes in base_errors[class_id]:
-                            intersection_errors[error_type][class_id].append(
-                                boxes)
-                else:
-                    current_errors = classified_det[error_type]
-                    used_boxes = set()
-                    for class_id in intersection_errors[error_type].keys():
-                        if class_id not in current_errors:
-                            del intersection_errors[error_type][class_id]
-                            continue
-                        for base_box in intersection_errors[error_type][class_id]:
-                            best_iou = 0.0
-                            for curr_box in current_errors[class_id]:
-                                if curr_box in used_boxes:
-                                    continue
-                                iou = utils.iou(base_box, curr_box)
-                                if iou > best_iou:
-                                    best_iou = iou
-                            if best_iou >= self.iou_th:
-                                used_boxes.add(curr_box)
-                            else:
-                                intersection_errors[error_type][class_id].remove(
-                                    base_box)
-            return intersection_errors
+                current_errors = classified_det[error_type]
 
-    def _union_of_errors(self, dets: dict[dict]) -> dict:
+                # 最初のバージョンの場合 → 初期化
+                if version == 0:
+                    for class_id, boxes in current_errors.items():
+                        intersection_errors[error_type][class_id] = boxes.copy(
+                        )
+                    continue
+
+                # 2バージョン目以降 → 共通部分を更新
+                new_intersection = dict()
+                for class_id, base_boxes in intersection_errors[error_type].items():
+                    if class_id not in current_errors:
+                        continue  # 現在のversionに存在しないclassは共通でない
+                    matched_boxes = []
+                    used = set()
+                    for base_box in base_boxes:
+                        best_iou = 0.0
+                        best_box = None
+                        for curr_box in current_errors[class_id]:
+                            if curr_box in used:
+                                continue
+                            iou = utils.iou(base_box, curr_box)
+                            if iou > best_iou:
+                                best_iou = iou
+                                best_box = curr_box
+                        if best_iou >= self.iou_th:
+                            matched_boxes.append(base_box)
+                            used.add(best_box)
+                    if matched_boxes:
+                        new_intersection[class_id] = matched_boxes
+                intersection_errors[error_type] = new_intersection
+        return intersection_errors
+
+    def _union_of_errors(self, classified_dets) -> dict:
         union_errors = {'FP': dict(), 'FN': dict()}
         for error_type in ['FP', 'FN']:
-            for version, classified_det in dets.items():
+            for version, classified_det in classified_dets.items():
                 current_errors = classified_det[error_type]
-                for class_id in current_errors.keys():
+                # 最初のバージョンの場合 → 初期化
+                if version == 0:
+                    for class_id, boxes in current_errors.items():
+                        union_errors[error_type][class_id] = boxes.copy(
+                        )
+                    continue
+                for class_id, boxes in current_errors.items():
                     if class_id not in union_errors[error_type]:
-                        union_errors[error_type][class_id] = list()
-                    for box in current_errors[class_id]:
-                        # すでに追加されているか確認
+                        union_errors[error_type][class_id] = []
+                    for box in boxes:
                         already_added = False
                         for existing_box in union_errors[error_type][class_id]:
-                            iou = utils.iou(box, existing_box)
-                            if iou >= self.iou_th:
+                            if utils.iou(box, existing_box) >= self.iou_th:
                                 already_added = True
                                 break
                         if not already_added:

@@ -10,10 +10,12 @@ class DetectionAnalyzer:
             gt, dets)  # これでdetsのバージョン数が切り替わっても使える
         intersection_errors = self._intersection_of_errors(classified_results)
         union_errors = self._union_of_errors(classified_results)
+        total_instances = self._total_instances(classified_results)
         return {
             'classified_results': classified_results,
             'intersection_errors': intersection_errors,
-            'union_errors': union_errors
+            'union_errors': union_errors,
+            'total_instances': total_instances
         }
 
     def _intersection_of_errors(self, classified_dets) -> dict:
@@ -70,6 +72,30 @@ class DetectionAnalyzer:
                         if not already_added:
                             union_errors[error_type][class_id].append(box)
         return union_errors
+
+    def _total_instances(self, dets: dict[dict]) -> dict:
+        total_instances = {"TP": dict(), "FP": dict(), "FN": dict()}
+        union_errors = self._union_of_errors(dets)
+        for error_type in ['FP', 'FN']:
+            for class_id in union_errors[error_type].keys():
+                total_instances[error_type][class_id] = union_errors[error_type][class_id]
+
+        for version, classified_det in dets.items():
+            tp_results = classified_det['TP']
+            for class_id in tp_results.keys():
+                if class_id not in total_instances['TP']:
+                    total_instances['TP'][class_id] = list()
+                for box in tp_results[class_id]:
+                    # すでに追加されているか確認
+                    already_added = False
+                    for existing_box in total_instances['TP'][class_id]:
+                        iou = utils.iou(box, existing_box)
+                        if iou >= self.iou_th:
+                            already_added = True
+                            break
+                    if not already_added:
+                        total_instances['TP'][class_id].append(box)
+        return total_instances
 
     def _classify_frame(self, gt, dets) -> dict[dict]:
         frame_results = dict()

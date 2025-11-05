@@ -7,6 +7,7 @@ from models.Yolov11 import Yolov11nDetector
 # from models.FastRCNN import FastRCNNDetector
 from models.Yolov5 import Yolov5nDetector
 from models.rtDETR import RTDETRDetector
+from models.yolov8l import Yolov8lDetector
 
 COCO_LABELS = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus",
@@ -32,7 +33,7 @@ if __name__ == "__main__":
         "--model",
         type=str,
         required=True,
-        choices=["yolov8n", "yolov5n", "yolov11n", "rtdetr", "ssd"],
+        choices=["yolov8n", "yolov5n", "yolov11n", "rtdetr", "ssd", "yolov8l"],
         help="Model to use: yolov8n, yolo11n, ssd, fastrcnn, yolov5n, mobilenet, detr",
     )
     argparser.add_argument(
@@ -57,8 +58,11 @@ if __name__ == "__main__":
             model = Yolov5nDetector()
         case "rtdetr":
             model = RTDETRDetector()
+        case 'yolov8l':
+            model = Yolov8lDetector()
         case _:
-            supported_models = ["yolov8n", "yolov11n", "yolov5n", "rtdetr"]
+            supported_models = ["yolov8n", "yolov11n",
+                                "yolov5n", "rtdetr", "yolov8l"]
             raise ValueError(
                 f"モデル '{model_name}' はサポートされていません。\n"
                 f"サポートされているモデル: {', '.join(supported_models)}"
@@ -70,6 +74,8 @@ if __name__ == "__main__":
         # "right_1"
     ]
     import time
+    print("map: ", map_name)
+    print("model: ", model_name)
     start = time.time()
     for camera in cameras:
         input_images_directory = os.path.join(

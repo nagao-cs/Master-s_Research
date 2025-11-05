@@ -7,7 +7,7 @@ class DetectionAnalyzer:
 
     def analyze_frame(self, gt: dict, dets: dict[dict], mode: str) -> dict:
         if mode == "standard":
-            dets = {0: dets[0]}  # 標準モードでは最初のバージョンのみを使用
+            dets = {0: dets[0]}  # 最初のバージョンのみを使用
         classified_results = self._classify_frame(
             gt, dets)  # これでdetsのバージョン数が切り替わっても使える
         intersection_errors = self._intersection_of_errors(classified_results)
@@ -19,6 +19,40 @@ class DetectionAnalyzer:
             'union_errors': union_errors,
             'total_instances': total_instances
         }
+
+    def compare_detections(self, gt, dets) -> dict:
+        comparison_results = {
+            'model_specific_FP': dict(),
+            'model_specific_FN': dict(),
+        }
+
+        classified_dets = self._classify_frame(gt, dets)
+        base_det = classified_dets[0]
+        for error_type in ['FP', 'FN']:
+            base_errors = base_det[error_type]
+            specific_errors = dict()
+            for class_id, base_boxes in base_errors.items():
+                specific_boxes = []
+                for box in base_boxes:
+                    is_specific = True
+                    for version, classified_det in classified_dets.items():
+                        if version == 0:
+                            continue
+                        current_errors = classified_det.get(error_type, {})
+                        if class_id not in current_errors:
+                            continue
+                        for curr_box in current_errors[class_id]:
+                            if utils.iou(box, curr_box) >= self.iou_th:
+                                is_specific = False
+                                break
+                        if not is_specific:
+                            break
+                    if is_specific:
+                        specific_boxes.append(box)
+                if specific_boxes:
+                    specific_errors[class_id] = specific_boxes
+            comparison_results[f'model_specific_{error_type}'] = specific_errors
+        return comparison_results
 
     def _intersection_of_errors(self, classified_dets) -> dict:
         intersection_errors = {'FP': dict(), 'FN': dict()}
@@ -82,28 +116,53 @@ class DetectionAnalyzer:
                             union_errors[error_type][class_id].append(box)
         return union_errors
 
-    def _total_instances(self, dets: dict[dict]) -> dict:
+    def _intersection_of_tp(self, classified_dets: dict[dict]) -> dict:
+        intersection_tp = dict()
+        for version, classified_det in classified_dets.items():
+            current_tp = classified_det['TP']
+
+            # 最初のバージョンの場合 → 初期化
+            if version == 0:
+                for class_id, boxes in current_tp.items():
+                    intersection_tp[class_id] = boxes.copy()
+                continue
+
+            # 2バージョン目以降 → 共通部分を更新
+            new_intersection = dict()
+            for class_id, base_boxes in intersection_tp.items():
+                if class_id not in current_tp:
+                    continue  # 現在のversionに存在しないclassは共通でない
+                matched_boxes = []
+                used = set()
+                for base_box in base_boxes:
+                    best_iou = 0.0
+                    best_box = None
+                    for curr_box in current_tp[class_id]:
+                        if curr_box in used:
+                            continue
+                        iou = utils.iou(base_box, curr_box)
+                        if iou > best_iou:
+                            best_iou = iou
+                            best_box = curr_box
+                    if best_iou >= self.iou_th:
+                        matched_boxes.append(base_box)
+                        used.add(best_box)
+                if matched_boxes:
+                    new_intersection[class_id] = matched_boxes
+            intersection_tp = new_intersection
+        return intersection_tp
+
+    def _total_instances(self, classified_dets: dict[dict]) -> dict:
         total_instances = {"TP": dict(), "FP": dict(), "FN": dict()}
-        union_errors = self._union_of_errors(dets)
+        union_errors = self._union_of_errors(classified_dets)
         for error_type in ['FP', 'FN']:
             for class_id in union_errors[error_type].keys():
                 total_instances[error_type][class_id] = union_errors[error_type][class_id]
 
-        for version, classified_det in dets.items():
-            tp_results = classified_det['TP']
-            for class_id in tp_results.keys():
-                if class_id not in total_instances['TP']:
-                    total_instances['TP'][class_id] = list()
-                for box in tp_results[class_id]:
-                    # すでに追加されているか確認
-                    already_added = False
-                    for existing_box in total_instances['TP'][class_id]:
-                        iou = utils.iou(box, existing_box)
-                        if iou >= self.iou_th:
-                            already_added = True
-                            break
-                    if not already_added:
-                        total_instances['TP'][class_id].append(box)
+        intersection_tp = self._intersection_of_tp(classified_dets)
+        for class_id in intersection_tp.keys():
+            total_instances["TP"][class_id] = intersection_tp[class_id]
+
         return total_instances
 
     def _classify_frame(self, gt, dets) -> dict[dict]:

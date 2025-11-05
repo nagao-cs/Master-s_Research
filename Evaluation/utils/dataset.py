@@ -12,11 +12,50 @@ class Dataset:
                 self.results[version] = self.results[version][:10]
         self.num_frame = len(self.results[0])
         self.num_gt_list = self.num_gt()
+        self.num_detection_dict = self.num_detections()
         self.common_fp_list = self.common_fp()
         self.common_fn_list = self.common_fn()
         self.all_fp_list = self.all_fp()
         self.all_fn_list = self.all_fn()
         self.total_obj_list = self.total_obj()
+
+    def topK_detection(self, version, frame, k):
+        detections = list()
+        for boxes in self.results[version][frame]['TP'].values():
+            for box in boxes:
+                detections.append(box)
+        for boxes in self.results[version][frame]['FP'].values():
+            for box in boxes:
+                detections.append(box)
+        detections.sort(key=lambda box: box[4], reverse=True)
+        return detections[:k]
+
+    def fp_detection(self, version, frame):
+        fp_detection = list()
+        for boxes in self.results[version][frame]['FP'].values():
+            for box in boxes:
+                fp_detection.append(box)
+        return fp_detection
+
+    def fn_detection(self, version, frame):
+        fn_detection = list()
+        for boxes in self.results[version][frame]['FN'].values():
+            for box in boxes:
+                fn_detection.append(box)
+        return fn_detection
+
+    def num_detections(self):
+        num_detection_dict = {version: list()
+                              for version in range(self.num_version)}
+        for version in range(self.num_version):
+            for frame in range(self.num_frame):
+                num_tp = sum(len(boxes)
+                             for boxes in self.results[0][frame]['TP'].values())
+                num_fp = sum(len(boxes)
+                             for boxes in self.results[0][frame]['FP'].values())
+                num_detection_dict[version].append(num_tp + num_fp)
+
+        return num_detection_dict
 
     def num_gt(self) -> list[int]:
         num_gt = list()

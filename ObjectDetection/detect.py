@@ -6,8 +6,7 @@ from models.Yolov11 import Yolov11nDetector
 # from models.SSD import SSDDetector
 # from models.FastRCNN import FastRCNNDetector
 from models.Yolov5 import Yolov5nDetector
-# from models.mobilenet import MobilenetDetector
-# from models.DETR import DETRDetector
+from models.rtDETR import RTDETRDetector
 
 COCO_LABELS = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus",
@@ -32,14 +31,18 @@ if __name__ == "__main__":
     argparser.add_argument(
         "--model",
         type=str,
-        default="yolov8n",
-        help="Model to use: yolov8n, yolo11n, ssd, fastrcnn, yolov5n, mobilenet, detr")
+        required=True,
+        choices=["yolov8n", "yolov5n", "yolov11n", "rtdetr", "ssd"],
+        help="Model to use: yolov8n, yolo11n, ssd, fastrcnn, yolov5n, mobilenet, detr",
+    )
     argparser.add_argument(
         "--map",
         type=str,
-        default="Town01",
-        help="Map name: Town01, Town02, etc."
+        choices=["Town01", "Town02", "Town03", "Town04", "Town05", "Town10HD"],
+        help="Map name: Town01, Town02, etc.",
+        required=True
     )
+
     args = argparser.parse_args()
     model_name = args.model
     map_name = args.map
@@ -52,9 +55,14 @@ if __name__ == "__main__":
             model = Yolov11nDetector()
         case "yolov5n":
             model = Yolov5nDetector()
+        case "rtdetr":
+            model = RTDETRDetector()
         case _:
-            print(f"Model {model_name} is not supported.")
-
+            supported_models = ["yolov8n", "yolov11n", "yolov5n", "rtdetr"]
+            raise ValueError(
+                f"モデル '{model_name}' はサポートされていません。\n"
+                f"サポートされているモデル: {', '.join(supported_models)}"
+            )
     input_base_dir = "C:\CARLA_Latest\WindowsNoEditor\output\image"
     cameras = [
         "front",

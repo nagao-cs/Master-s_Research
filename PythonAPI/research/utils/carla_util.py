@@ -38,16 +38,16 @@ def setting_traffic_manager(client, synchronous_mode):
     return traffic_manager, tm_port
 
 
-def spawn_npc_vehicles(world, bp, traffic_manager, spawn_points, car_ratio):
+def spawn_npc_vehicles(world, bp, traffic_manager, spawn_points, num_vehicle):
     tm_port = traffic_manager.get_port()
     num_spawn_points = len(spawn_points)
     vehicles = list()
-    num_vehicles = int(num_spawn_points * car_ratio)
+    num_vehicle = min(num_vehicle, num_spawn_points - 1)
     car_bps = [
         v for v in bp.filter(
             'vehicle.*') if 'harley-davidson' not in v.tags and 'yamaha' not in v.tags and 'kawasaki' not in v.tags and 'crossbike' not in v.tags and 'omafiets' not in v.tags and 'vespa' not in v.tags]
     # car_bps = [v for v in bp.filter('vehicle.*')]
-    for i in range(num_vehicles):
+    for i in range(num_vehicle):
         vehicle_bp = random.choice(car_bps)
         transform = spawn_points[i+1]
         npc = world.try_spawn_actor(vehicle_bp, transform)
@@ -120,7 +120,7 @@ def spawn_npc_pedestrians(world, client, bp, num_walkers):
 
 
 def spawn_Ego_vehicles(client, world, bp, spawn_points):
-    spawn_point = spawn_points[-2]
+    spawn_point = spawn_points[0]
     ego_vehicle = world.try_spawn_actor(bp, spawn_point)
     if ego_vehicle:
         ego_vehicle.set_autopilot(True)

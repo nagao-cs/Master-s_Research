@@ -65,6 +65,40 @@ except IndexError:
 
 
 def main():
+    import argparse
+    argparser = argparse.ArgumentParser(
+        description="Carla Depth Camera with Object Detection")
+    argparser.add_argument(
+        "--map",
+        type=str,
+        choices=["Town01", "Town02", "Town03", "Town04", "Town05", "Town10HD"],
+        help="Map name: Town01, Town02, Town04, Town05, Town10HD",
+        required=True,
+    )
+    argparser.add_argument(
+        "--vehicle",
+        type=int,
+        default=50,
+        help="Number of vehicles to spawn",
+        required=False,
+    )
+    argparser.add_argument(
+        "--walker",
+        type=int,
+        default=50,
+        help="Number of pedestrians to spawn",
+        required=False,
+    )
+    argparser.add_argument(
+        "--debug",
+        default=False,
+        action="store_true",
+    )
+    args = argparser.parse_args()
+    MAP = args.map
+    NUM_WALKERS = args.walker
+    NUM_CAR = args.vehicle
+    debug = args.debug
     # === サーバに接続し、基本的なセッティング ===
     client = carla_util.connect_to_server(CARLA_HOST, CARLA_PORT, TIMEOUT)
     world, blueprint_library = carla_util.load_map(client, MAP)
@@ -78,12 +112,12 @@ def main():
     # === 天候の設定 ===
     from dynamic_weather import Weather
     weather = Weather(world.get_weather())
-    speed_factor = 5.0  # 天候変化の速度係数
+    speed_factor = 3.0  # 天候変化の速度係数
     update_freq = 0.1 / speed_factor  # 天候更新頻度（秒）
 
     # === NPC車両スポーン ===
     vehicles = carla_util.spawn_npc_vehicles(
-        world, blueprint_library, traffic_manager, spawn_points, CAR_RATIO)
+        world, blueprint_library, traffic_manager, spawn_points, NUM_CAR)
 
     # === 歩行者スポーン ===
     all_actors = carla_util.spawn_npc_pedestrians(
@@ -106,8 +140,9 @@ def main():
     K = camera_util.build_projection_matrix(IM_WIDTH, IM_HEIGHT, FOV)
 
     # === 保存用のキューを作成 ===
-    original_image_ques, bbox_image_ques, label_ques = camera_util.create_save_queues(
-        NUM_CAMERA)
+    if not debug:
+        original_image_ques, bbox_image_ques, label_ques = camera_util.create_save_queues(
+            NUM_CAMERA)
 
     # === 保存用のディレクトリ作成 ===
     os.makedirs(OUTPUT_IMG_DIR, exist_ok=True)
@@ -223,12 +258,13 @@ def main():
                 cv2.imshow(display_name, bbox_image)
 
                 # 元画像、バウンディングボックス画像、ラベルを保存用キューに追加
-                original_image_save_que = original_image_ques[idx]
-                original_image_save_que.put(original_image)
-                bbox_save_que = bbox_image_ques[idx]
-                bbox_save_que.put(bbox_image)
-                label_save_que = label_ques[idx]
-                label_save_que.put(visible_bboxes)
+                if not debug:
+                    original_image_save_que = original_image_ques[idx]
+                    original_image_save_que.put(original_image)
+                    bbox_save_que = bbox_image_ques[idx]
+                    bbox_save_que.put(bbox_image)
+                    label_save_que = label_ques[idx]
+                    label_save_que.put(visible_bboxes)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 print("ユーザーによりシミュレーションが停止されました。")
                 break
@@ -238,18 +274,19 @@ def main():
         # carla_util.show_queue_content(original_image_ques[0], "Original Images")
         # save_start = time.time()
         # === 画像を保存 ===
-        print("オリジナル画像を保存中")
-        output_original_dir = OUTPUT_IMG_DIR + f"/{MAP}/original"
-        carla_util.save_images(original_image_ques,
-                               cameras, output_original_dir)
-        print("バウンディングボックスを描画した画像を保存中")
-        output_bbox_dir = OUTPUT_IMG_DIR + f"/{MAP}/bbox"
-        carla_util.save_images(bbox_image_ques, cameras, output_bbox_dir)
-        # === ラベルを保存 ===
-        print("ラベルを保存中")
-        output_label_dir = OUTPUT_LABEL_DIR + f"/{MAP}"
-        carla_util.save_labels(label_ques, cameras, output_label_dir)
-        # save_end = time.time()
+        if not debug:
+            print("オリジナル画像を保存中")
+            output_original_dir = OUTPUT_IMG_DIR + f"/{MAP}/original"
+            carla_util.save_images(original_image_ques,
+                                   cameras, output_original_dir)
+            print("バウンディングボックスを描画した画像を保存中")
+            output_bbox_dir = OUTPUT_IMG_DIR + f"/{MAP}/bbox"
+            carla_util.save_images(bbox_image_ques, cameras, output_bbox_dir)
+            # === ラベルを保存 ===
+            print("ラベルを保存中")
+            output_label_dir = OUTPUT_LABEL_DIR + f"/{MAP}"
+            carla_util.save_labels(label_ques, cameras, output_label_dir)
+            # save_end = time.time()
 
         # === クリーンアップ ===
         carla_util.cleanup(client, world, vehicles,

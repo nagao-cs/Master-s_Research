@@ -1,3 +1,6 @@
+from typing import Callable
+
+
 class DetectionMetrics:
     def __init__(self):
         self.metrics = dict()  # 指標と関数のマッピング
@@ -7,10 +10,11 @@ class DetectionMetrics:
             'union_fp': list(),
             'union_fn': list(),
             'total_instances': list(),
-            'num_frames': 0
+            'num_frames': 0,
+            'num_inference': 0
         }
 
-    def update_counters(self, analyzed_frame: dict):
+    def update_counters(self, analyzed_frame: dict, mode: str):
         intersection_fp = sum(
             len(boxes) for boxes in analyzed_frame['intersection_errors']['FP'].values())
         intersection_fn = sum(
@@ -28,8 +32,12 @@ class DetectionMetrics:
         self.counters['union_fn'].append(union_fn)
         self.counters['total_instances'].append(total_instances)
         self.counters['num_frames'] += 1
+        if mode == 'multi-version':
+            self.counters['num_inference'] += 3
+        else:
+            self.counters['num_inference'] += 1
 
-    def add_metric(self, func_name: str, func=None):
+    def add_metric(self, func_name: str, func: Callable):
         self.metrics[func_name] = func
 
     def covod(self):
@@ -66,3 +74,6 @@ class DetectionMetrics:
         for name, func in self.metrics.items():
             results[name] = func()
         return results
+
+    def get_num_inference(self):
+        return self.counters['num_inference']

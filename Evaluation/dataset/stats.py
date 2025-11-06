@@ -13,11 +13,16 @@ class DetectionStats:
             'num_false_positives',
             'num_false_negatives',
         ])
+        self.tp_stats = dict()
         self.fp_stats = dict()
         self.fn_stats = dict()
         self.class_stats = dict()
 
     def update(self, frame_idx: int, gt: dict, analyzed_detctions: dict):
+        for class_id, boxes in analyzed_detctions['total_instances']['TP'].items():
+            if class_id not in self.tp_stats:
+                self.tp_stats[class_id] = list()
+            self.tp_stats[class_id].extend(boxes)
         for class_id, boxes in analyzed_detctions['total_instances']['FP'].items():
             if class_id not in self.fp_stats:
                 self.fp_stats[class_id] = list()
@@ -87,13 +92,68 @@ class DetectionStats:
         plt.grid()
         plt.show()
 
-    def plot_error_analysis(self):
+    def plot_detection_analysis(self):
         class_id_name_map = {
             0: 'Pedestrian',
-            2: 'Car',
+            2: 'Vehicle',
             9: 'Traffic Light',
             11: 'Traffic Sign'
         }
+
+        # TPの数とconfidence分布を2行のサブプロットで表示
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 12))
+
+        # True Positives の数
+        tp_counts = []
+        class_names = []
+        confidence_distributions = dict()
+        valid_indices = list()
+
+        for i, (class_id, boxes) in enumerate(self.tp_stats.items()):
+            class_name = class_id_name_map.get(class_id, f'Class {class_id}')
+            class_names.append(class_name)
+            tp_counts.append(len(boxes))
+
+            # confidenceスコアの抽出 (boxesの最後の要素がconfidenceと仮定)
+            confidences = [box[-1] for box in boxes]
+            if confidences:
+                confidence_distributions[class_id] = confidences
+                valid_indices.append(i)
+
+        # TP数の棒グラフ
+        ax1.bar(class_names, tp_counts)
+        ax1.set_xlabel('Class')
+        ax1.set_ylabel('Number of True Positives')
+        ax1.set_title('True Positives by Class')
+        plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45)
+
+        # Confidence分布の箱ひげ図
+        if confidence_distributions:  # 有効なconfidenceデータがある場合のみプロット
+            # リストとしてconfidence値を保持
+            confidence_values = []
+            labels = []
+
+            # 各クラスのconfidence値をリストに追加
+            for class_id, confidences in confidence_distributions.items():
+                class_name = class_id_name_map.get(
+                    class_id, f'Class {class_id}')
+                confidence_values.append(confidences)
+                labels.append(class_name)
+
+            # 箱ひげ図の描画
+            bp = ax2.boxplot(confidence_values, labels=labels)
+
+            # 箱ひげ図のスタイル設定
+            plt.setp(bp['boxes'], color='blue', alpha=0.7)
+            plt.setp(bp['whiskers'], color='black', alpha=0.7)
+            plt.setp(bp['medians'], color='red')
+
+            ax2.set_xlabel('Class')
+            ax2.set_ylabel('Confidence Score')
+            ax2.set_title('Confidence Distribution of True Positives')
+            plt.setp(ax2.xaxis.get_majorticklabels(), rotation=45)
+        plt.tight_layout()
+        plt.show()
 
         # FPの数とconfidence分布を2行のサブプロットで表示
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 12))
@@ -161,7 +221,7 @@ class DetectionStats:
         plt.tight_layout()
         plt.show()
 
-        # False Negatives (既存のコード)
+        # False Negative
         plt.figure(figsize=(12, 6))
         for class_id, boxes in self.fn_stats.items():
             class_name = class_id_name_map.get(class_id, f'Class {class_id}')

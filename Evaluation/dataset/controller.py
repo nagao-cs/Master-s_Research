@@ -6,10 +6,10 @@ class AdaptiveController:
 
     def control_mode(self, gt: dict, dets: dict[dict]) -> str:
         if not self.adaptive:
-            return "standard"
+            return "multi-version"
         base_det = dets[0]
         total_instances = sum(len(boxes) for boxes in base_det.values())
         if total_instances >= self.instance_threshold:
-            return "adaptive"
+            return "multi-version"
         else:
-            return "standard"
+            return "1version"

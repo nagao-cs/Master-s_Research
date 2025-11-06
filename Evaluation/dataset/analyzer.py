@@ -6,7 +6,7 @@ class DetectionAnalyzer:
         self.iou_th = iou_th
 
     def analyze_frame(self, gt: dict, dets: dict[dict], mode: str) -> dict:
-        if mode == "standard":
+        if mode == "1version":
             dets = {0: dets[0]}  # 最初のバージョンのみを使用
         classified_results = self._classify_frame(
             gt, dets)  # これでdetsのバージョン数が切り替わっても使える

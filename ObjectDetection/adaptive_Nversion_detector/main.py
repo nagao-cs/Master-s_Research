@@ -3,6 +3,26 @@ import sys
 sys.path.append("..")
 
 
+def save_stats(models, n_inference, time_elapsed, rule, threshold):
+    import os
+    import json
+    output_stats_dir = rf"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\adaptive_Nversion_detector\output\stats"
+    os.makedirs(output_stats_dir, exist_ok=True)
+    model_key = '_'.join(models)
+    stats = {
+        "models": models,
+        "rule": rule,
+        "threshold": threshold,
+        "n_inference": n_inference,
+        "time_elapsed": time_elapsed,
+        "throughput": 2000 / time_elapsed if time_elapsed > 0 else 0.0
+    }
+    output_stats_path = os.path.join(
+        output_stats_dir, f"{model_key}_stats.json")
+    with open(output_stats_path, 'w') as f:
+        json.dump(stats, f, indent=4)
+
+
 def draw_bbox(image, bboxes):
     import cv2
     im_width = image.shape[1]
@@ -101,22 +121,27 @@ if __name__ == "__main__":
     import os
     print("map: ", map_name)
     print("model: ", model_name)
+    from logging import getLogger
+    logger = getLogger('ultralytics')
+    logger.disabled = True
     if not os.path.exists(input_image_dir):
         print(
             f"Input directory does not exist: {input_image_dir}")
         exit(1)
 
+    from tqdm import tqdm
+    file_list = os.listdir(input_image_dir)
     # 計測開始
     start = time.time()
 
-    for image_file in os.listdir(input_image_dir):
+    for image_file in tqdm(file_list):
         image_path = os.path.join(input_image_dir, image_file)
         if image_path is None:
             print(f"Could not read image: {image_path}")
             continue
-        base_bboxes = model.predict(image_path)
-        if detection_logic.check_switch_to_Nversion(base_bboxes, rule, threshold) or n_model == 1:
-            all_detections = list()
+        base_bboxes = model_list[0].predict(image_path)
+        if n_model > 1 and detection_logic.check_switch_to_Nversion(base_bboxes, rule, threshold):
+            all_detections = [base_bboxes]
             for model in model_list[1:]:
                 bboxes = model.predict(image_path)
                 all_detections.append(bboxes)
@@ -163,3 +188,4 @@ if __name__ == "__main__":
                     f"{class_id} {x_center} {y_center} {width} {height} {conf}\n")
     print(f"Total inferences made: {n_inference}")
     print("All images processed.")
+    save_stats(model_names, n_inference, end - start, rule, threshold)

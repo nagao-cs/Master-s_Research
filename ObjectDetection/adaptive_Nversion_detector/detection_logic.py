@@ -32,57 +32,6 @@ def check_switch_to_Nversion(detections: List[Dict[str, Any]], rule: str, thresh
         raise ValueError(f"Unknown rule: {rule}")
 
 
-# def integrate_N_detections(detections_list: List[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
-    """
-    Nバージョンの検出結果を多数決で統合する
-
-    Args:
-        detections_list (List[List[Dict[str(class_id), Any]]]): 各バージョンの検出結果のリスト
-    Returns:
-        List[Dict[str, Any]]: 統合された検出結果
-    """
-    integrated_detections = []
-    majority_threshold = ceil(len(detections_list) / 2)
-    groups = list()
-    for version_id, detections in enumerate(detections_list):
-        if version_id == 0:
-            for det in detections:
-                groups.append([det])
-        else:
-            matched_flags = [False] * len(groups)
-            for det in detections:
-                best_iou = 0.0
-                best_group = None
-                for group in groups:
-                    if matched_flags[groups.index(group)]:
-                        continue
-                    base_det = group[0]
-                    if base_det['class_id'] != det['class_id']:
-                        continue
-                    iou = _compute_iou(base_det, det)
-                    if iou >= 0.5 and iou > best_iou:
-                        best_iou = iou
-                        best_group = group
-                if best_group is not None:
-                    best_group.append(det)
-                    matched_flags[groups.index(best_group)] = True
-                else:
-                    groups.append([det])
-    for group in groups:
-        if len(group) >= majority_threshold:
-            avg_det = {
-                'x_center': sum(det['x_center'] for det in group) / len(group),
-                'y_center': sum(det['y_center'] for det in group) / len(group),
-                'width': sum(det['width'] for det in group) / len(group),
-                'height': sum(det['height'] for det in group) / len(group),
-                'confidence': sum(det['confidence'] for det in group) / len(group),
-                'label': group[0]['label'],
-                'class_id': group[0]['class_id']
-            }
-            integrated_detections.append(avg_det)
-    return integrated_detections
-
-
 def integrate_N_detections(detections_list: List[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
     """
     Nバージョンの検出結果を多数決で統合する (レポート 3.2節に基づく)
@@ -93,22 +42,16 @@ def integrate_N_detections(detections_list: List[List[Dict[str, Any]]]) -> List[
         統合された検出結果
     """
     integrated_detections = []
-    # N=3の場合、majority_threshold は ceil(3/2) = 2
     majority_threshold = ceil(len(detections_list) / 2)
-    IOU_THRESHOLD = 0.5  # レポートの要件
+    IOU_THRESHOLD = 0.5
 
-    # すべての検出結果を1つのリストに集め、元のバージョンIDを付与
     all_detections = []
     for version_id, version_dets in enumerate(detections_list):
         for det in version_dets:
-            # 元のバージョンIDを追跡し、後の処理で異なるバージョンからの検出であることを確認
             all_detections.append({**det, 'version_id': version_id})
 
     is_processed = [False] * len(all_detections)
     groups = []
-
-    # 1. すべての検出結果を網羅的にグループ化
-    # このロジックは、元のコードの意図 (検出結果を順次グループに振り分ける) を維持します。
 
     for i in range(len(all_detections)):
         if is_processed[i]:
@@ -117,27 +60,25 @@ def integrate_N_detections(detections_list: List[List[Dict[str, Any]]]) -> List[
         det_i = all_detections[i]
         current_group = [det_i]
         is_processed[i] = True
+        best_iou = 0.0
+        matched_index = -1
 
         for j in range(i + 1, len(all_detections)):
-            if is_processed[j]:
-                continue
-
             det_j = all_detections[j]
 
-            # クラスラベルが同一
-            if det_i['class_id'] != det_j['class_id']:
+            if (det_i['class_id'] != det_j['class_id']) or is_processed[j] or (det_i['version_id'] == det_j['version_id']):
                 continue
 
-            # 座標の一致度が0.5以上
             iou = _compute_iou(det_i, det_j)
-            if iou < IOU_THRESHOLD:
+            if iou < IOU_THRESHOLD or iou < best_iou:
                 continue
 
-            # 💡 異なるバージョンからの検出のみをグループに追加する厳密なチェック (より堅牢な多数決のため)
-            if det_i['version_id'] != det_j['version_id']:
-                # det_j は det_i のグループに属する
-                current_group.append(det_j)
-                is_processed[j] = True
+            if iou > best_iou:
+                best_iou = iou
+                matched_index = j
+        if matched_index != -1:
+            current_group.append(all_detections[matched_index])
+            is_processed[matched_index] = True
 
         groups.append(current_group)
 

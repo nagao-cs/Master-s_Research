@@ -1,9 +1,10 @@
+from typing import List
 from . import detection_logic
 import sys
 sys.path.append("..")
 
 
-def save_stats(models, n_inference, time_elapsed, rule, threshold):
+def save_stats(models: List[str], n_inference: int, time_elapsed: float, rule: str, threshold: float, adaptive: bool):
     import os
     import json
     output_stats_dir = rf"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\adaptive_Nversion_detector\output\stats"
@@ -15,12 +16,14 @@ def save_stats(models, n_inference, time_elapsed, rule, threshold):
         "threshold": threshold,
         "n_inference": n_inference,
         "time_elapsed": time_elapsed,
-        "throughput": 2000 / time_elapsed if time_elapsed > 0 else 0.0
+        "throughput": 2000 / time_elapsed if time_elapsed > 0 else 0.0,
+        "adaptive": adaptive
     }
     output_stats_path = os.path.join(
-        output_stats_dir, f"{model_key}_stats.json")
-    with open(output_stats_path, 'w') as f:
-        json.dump(stats, f, indent=4)
+        output_stats_dir, f"{model_key}_stats.jsonl")
+    with open(output_stats_path, 'a') as f:
+        json.dump(stats, f)
+        f.write("\n")
 
 
 def draw_bbox(image, bboxes):
@@ -72,13 +75,17 @@ if __name__ == "__main__":
         type=str,
         choices=["n_det", "min_conf"],
         default="min_conf",
-        required=True
     )
     argparser.add_argument(
         "--threshold",
         type=float,
         default=0.5,
-        required=True
+    )
+    argparser.add_argument(
+        "--adaptive",
+        action="store_true",
+        default=False,
+        help="Enable adaptive detection mode",
     )
     args = argparser.parse_args()
     print(args)
@@ -87,6 +94,7 @@ if __name__ == "__main__":
     map_name = args.map
     rule = args.rule
     threshold = args.threshold
+    adaptive = args.adaptive
 
     model_list = list()
     from models.Yolov8n import Yolov8nDetector
@@ -94,25 +102,27 @@ if __name__ == "__main__":
     from models.Yolov5 import Yolov5nDetector
     from models.rtDETR import RTDETRDetector
     from models.yolov8l import Yolov8lDetector
+    from models.SSD import SSDDetector
     for model_name in model_names:
-        match model_name:
-            case "yolov8n":
-                model = Yolov8nDetector()
-            case "yolov11n":
-                model = Yolov11nDetector()
-            case "yolov5n":
-                model = Yolov5nDetector()
-            case "rtdetr":
-                model = RTDETRDetector()
-            case 'yolov8l':
-                model = Yolov8lDetector()
-            case _:
-                supported_models = ["yolov8n", "yolov11n",
-                                    "yolov5n", "rtdetr", "yolov8l"]
-                raise ValueError(
-                    f"モデル '{model_name}' はサポートされていません。\n"
-                    f"サポートされているモデル: {', '.join(supported_models)}"
-                )
+        if model_name == "yolov8n":
+            model = Yolov8nDetector()
+        elif model_name == "yolov11n":
+            model = Yolov11nDetector()
+        elif model_name == "yolov5n":
+            model = Yolov5nDetector()
+        elif model_name == "rtdetr":
+            model = RTDETRDetector()
+        elif model_name == 'yolov8l':
+            model = Yolov8lDetector()
+        elif model_name == "ssd":
+            model = SSDDetector()
+        else:
+            supported_models = ["yolov8n", "yolov11n",
+                                "yolov5n", "rtdetr", "yolov8l"]
+            raise ValueError(
+                f"モデル '{model_name}' はサポートされていません。\n"
+                f"サポートされているモデル: {', '.join(supported_models)}"
+            )
         model_list.append(model)
     input_image_dir = rf"C:\CARLA_Latest\WindowsNoEditor\output\image\{map_name}\original\front"
     n_inference = 0
@@ -140,7 +150,7 @@ if __name__ == "__main__":
             print(f"Could not read image: {image_path}")
             continue
         base_bboxes = model_list[0].predict(image_path)
-        if n_model > 1 and detection_logic.check_switch_to_Nversion(base_bboxes, rule, threshold):
+        if (adaptive == False) or (n_model > 1 and detection_logic.check_switch_to_Nversion(base_bboxes, rule, threshold)):
             all_detections = [base_bboxes]
             for model in model_list[1:]:
                 bboxes = model.predict(image_path)
@@ -160,8 +170,8 @@ if __name__ == "__main__":
     print(f"total object detection time: {end - start:.2f} seconds")
 
     import cv2
-    output_image_dir = rf"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\adaptive_Nversion_detector\output\images\{map_name}\{'_'.join(model_names)}"
-    output_label_dir = rf"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\adaptive_Nversion_detector\output\labels\{map_name}\{'_'.join(model_names)}"
+    output_image_dir = rf"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\adaptive_Nversion_detector\output\images\{map_name}\{str(adaptive)}_{rule}_{'_'.join(model_names)}"
+    output_label_dir = rf"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\adaptive_Nversion_detector\output\labels\{map_name}\{str(adaptive)}_{rule}_{'_'.join(model_names)}"
     os.makedirs(output_image_dir, exist_ok=True)
     os.makedirs(output_label_dir, exist_ok=True)
     for image_file, output_label in zip(os.listdir(input_image_dir), output_label_list):
@@ -188,4 +198,5 @@ if __name__ == "__main__":
                     f"{class_id} {x_center} {y_center} {width} {height} {conf}\n")
     print(f"Total inferences made: {n_inference}")
     print("All images processed.")
-    save_stats(model_names, n_inference, end - start, rule, threshold)
+    elapsed = end - start
+    save_stats(model_names, n_inference, elapsed, rule, threshold, adaptive)

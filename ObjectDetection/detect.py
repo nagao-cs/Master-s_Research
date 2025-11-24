@@ -3,11 +3,12 @@ import cv2
 from concurrent.futures import ThreadPoolExecutor
 from models.Yolov8n import Yolov8nDetector
 from models.Yolov11 import Yolov11nDetector
-# from models.SSD import SSDDetector
+from models.SSD import SSDDetector
 # from models.FastRCNN import FastRCNNDetector
 from models.Yolov5 import Yolov5nDetector
 from models.rtDETR import RTDETRDetector
 from models.yolov8l import Yolov8lDetector
+
 
 COCO_LABELS = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus",
@@ -49,24 +50,25 @@ if __name__ == "__main__":
     map_name = args.map
     conf_threshold = 0.25
 
-    match model_name:
-        case "yolov8n":
-            model = Yolov8nDetector()
-        case "yolov11n":
-            model = Yolov11nDetector()
-        case "yolov5n":
-            model = Yolov5nDetector()
-        case "rtdetr":
-            model = RTDETRDetector()
-        case 'yolov8l':
-            model = Yolov8lDetector()
-        case _:
-            supported_models = ["yolov8n", "yolov11n",
-                                "yolov5n", "rtdetr", "yolov8l"]
-            raise ValueError(
-                f"モデル '{model_name}' はサポートされていません。\n"
-                f"サポートされているモデル: {', '.join(supported_models)}"
-            )
+    if model_name == 'yolov8n':
+        model = Yolov8nDetector()
+    elif "yolov11n":
+        model = Yolov11nDetector()
+    elif "yolov5n":
+        model = Yolov5nDetector()
+    elif "rtdetr":
+        model = RTDETRDetector()
+    elif 'yolov8l':
+        model = Yolov8lDetector()
+    elif "ssd":
+        model = SSDDetector()
+    else:
+        supported_models = ["yolov8n", "yolov11n",
+                            "yolov5n", "rtdetr", "yolov8l"]
+        raise ValueError(
+            f"モデル '{model_name}' はサポートされていません。\n"
+            f"サポートされているモデル: {', '.join(supported_models)}"
+        )
     input_base_dir = "C:\CARLA_Latest\WindowsNoEditor\output\image"
     cameras = [
         "front",

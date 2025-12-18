@@ -28,7 +28,7 @@ __pycache__/
 /信頼性学会
 /進捗報告
 /Evaluation/*.pkl
-/detection_env
+/detection-env
 /new_detection_env
 /raw_dataset/dataset
 /raw_dataset/images
@@ -36,3 +36,9 @@ __pycache__/
 /raw_dataset/runs
 /国際学会
 /COCO_exp
+/ObjectDetection/integrated_output
+*.png
+*pt
+/ObjectDetection/adaptive_Nversion_detector/output
+/ReliabilityOfNversionObjectDetection
+/test

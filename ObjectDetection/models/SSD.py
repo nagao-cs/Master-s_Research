@@ -2,10 +2,7 @@ import tensorflow_hub as hub
 import cv2
 import numpy as np
 from models.AbstractObjectDetector import AbstractObjectDetector
-import os
-import csv
 import tensorflow as tf
-from PIL import Image
 import utils.utils as utils
 
 
@@ -58,9 +55,14 @@ class SSDDetector(AbstractObjectDetector):
                 width = xmax - xmin
                 height = ymax - ymin
 
-                class_id = classes[i]
+                size = width * height * (800 * 600)
+                if size < utils.SIZE_THRESHOLD:
+                    continue
+
+                class_id = classes[i] - 1
                 conf = scores[i]
-                label = f"Class {class_id}"
+                # label = utils.COCO_LABELS[class_id]
+                label = class_id
                 output.append({
                     'x_center': x_center,
                     'y_center': y_center,

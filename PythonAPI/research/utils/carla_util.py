@@ -169,9 +169,9 @@ def save_labels(label_queues, cameras, output_dir):
             label_path = f"{save_dir}/{num_frame:06d}.txt"
             with open(label_path, 'w') as f:
                 for label in labels:
-                    class_id, x_center, y_center, width, height = label
+                    class_id, x_center, y_center, width, height, dist = label
                     f.write(
-                        f"{class_id} {x_center} {y_center} {width} {height}\n")
+                        f"{class_id} {x_center} {y_center} {width} {height} {dist}\n")
             num_frame += 1
 
 

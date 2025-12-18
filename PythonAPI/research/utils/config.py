@@ -3,7 +3,7 @@ CARLA_HOST = 'localhost'
 CARLA_PORT = 2000
 TIMEOUT = 10
 
-MAP = "Town02"
+MAP = "Town01"
 TIME_DURATION = 100  # シミュレーション時間（秒）
 VALID_DISTANCE = 100  # バウンディングボックス検出の最大距離
 SIZE_THRESHOLD = 200  # バウンディングボックスの最小サイズ(わかりやすく大きくしてる)
@@ -22,8 +22,10 @@ YMAX = 4
 DIST = 5
 NUM_CAMERA = 1  # カメラの数
 
-OUTPUT_IMG_DIR = "C:\\CARLA_Latest\\WindowsNoEditor\\output\\image"
-OUTPUT_LABEL_DIR = "C:\\CARLA_Latest\\WindowsNoEditor\\output\\label"
+# OUTPUT_IMG_DIR = "C:\\CARLA_Latest\\WindowsNoEditor\\output\\image"
+OUTPUT_IMG_DIR = "C:\\CARLA_Latest\\WindowsNoEditor\\ReliabilityOfNversionObjectDetection\\dataset\\images"
+# OUTPUT_LABEL_DIR = "C:\\CARLA_Latest\\WindowsNoEditor\\output\\label"
+OUTPUT_LABEL_DIR = "C:\\CARLA_Latest\\WindowsNoEditor\\ReliabilityOfNversionObjectDetection\\dataset\\labels"
 
 # YOLOv5 COCOデータセット準拠のクラスIDを想定
 CLASS_MAPPING = {

@@ -1,5 +1,5 @@
 import os
-import utils
+from . import utils
 from pprint import pprint
 
 IM_WIDTH = 800

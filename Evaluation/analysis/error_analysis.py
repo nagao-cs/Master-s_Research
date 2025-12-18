@@ -173,7 +173,7 @@ def plot_error_statistics(fp_df: pd.DataFrame, fn_df: pd.DataFrame):
     }
 
     # サブプロット数を2x2に変更
-    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
     # FPの信頼度とサイズの関係
     ax = axes[0][0]  # 2次元インデックスの正しい使用方法
@@ -227,7 +227,6 @@ def plot_confidence_size_by_class(fp_df: pd.DataFrame):
     """
     class_names = {
         0: 'Pedestrian',
-        1: 'bicycle',
         2: 'Vehicle',
         9: 'Traffic Light',
         11: 'Traffic Sign'
@@ -293,7 +292,7 @@ if __name__ == "__main__":
         "--model",
         type=str,
         required=True,
-        choices=["yolov8n", "yolov11n", "yolov5n", "rtdetr"],
+        choices=["yolov8n", "yolov11n", "yolov5n", "rtdetr", "yolov8l"],
     )
     args = argparser.parse_args()
     map = args.map

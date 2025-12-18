@@ -14,7 +14,7 @@ class DetectionIntegrator:
         最後に過半数以上のバージョンで登場したboxのみ残す。
         """
         if self.num_version == 1 or mode == "1version":
-            return {0: dets[0]}
+            return dets[0]
         # 全クラスIDを取得
         all_classes = set()
         for v in dets.values():
@@ -61,7 +61,7 @@ class DetectionIntegrator:
 
         # --- 最終フィルタリング ---
         filtered_result = self._filter_majority(accumulated_boxes)
-        return {0: filtered_result}
+        return filtered_result
 
     def _iou_matrix(self, boxes1: np.ndarray, boxes2: np.ndarray) -> np.ndarray:
         x11 = boxes1[:, 0] - boxes1[:, 2] / 2

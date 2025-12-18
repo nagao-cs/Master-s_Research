@@ -71,4 +71,5 @@ if __name__ == "__main__":
         stats.update(frame_idx, gt, analyzed)
     stats.plot_transition()
     stats.plot_detection_analysis()
+    stats.analyze_confidence_statistics()
     stats.analyze_class_statistics()

@@ -1,11 +1,12 @@
 from utils import utils
+from typing import Dict, List
 
 
 class DetectionAnalyzer:
     def __init__(self, iou_th: float):
         self.iou_th = iou_th
 
-    def analyze_frame(self, gt: dict, dets: dict[dict], mode: str) -> dict:
+    def analyze_frame(self, gt: dict, dets: Dict[int, Dict[int, List]], mode: str) -> dict:
         if mode == "1version":
             dets = {0: dets[0]}  # 最初のバージョンのみを使用
         classified_results = self._classify_frame(

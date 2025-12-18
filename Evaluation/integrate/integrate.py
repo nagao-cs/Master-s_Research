@@ -4,7 +4,7 @@ from .detection import Detection
 
 
 class DetectionIntegrator:
-    def __init__(self, num_models: int, iou_threshold: float = 0.5, confidence_threshold: float = 0.3):
+    def __init__(self, num_models: int, iou_threshold: float = 0.5, confidence_threshold: float = 0.25):
         self.num_models = num_models
         self.iou_threshold = iou_threshold
         self.confidence_threshold = confidence_threshold

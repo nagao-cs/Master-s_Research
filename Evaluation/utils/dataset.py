@@ -1,5 +1,4 @@
-import classify
-import utils
+from . import classify, utils
 
 
 class Dataset:

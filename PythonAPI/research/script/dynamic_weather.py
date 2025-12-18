@@ -25,8 +25,8 @@ class Sun(object):
         self.azimuth = azimuth
         self.altitude = altitude
         self._t = 0.0
-        self.MIN_ALTITUDE = 15.0  # これより下がると暗くなりすぎる
-        self.MAX_ALTITUDE = 85.0  # 真上すぎると不自然
+        self.MIN_ALTITUDE = 25.0
+        self.MAX_ALTITUDE = 75.0
 
     def tick(self, delta_seconds):
         self._t += 0.008 * delta_seconds

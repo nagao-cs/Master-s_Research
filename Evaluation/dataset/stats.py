@@ -319,3 +319,64 @@ class DetectionStats:
         plt.legend()
         plt.tight_layout()
         plt.show()
+
+    def analyze_confidence_statistics(self):
+        """
+        TPとFPの信頼度統計を分析して表示
+        """
+        class_names = {
+            0: '歩行者',
+            2: '車両',
+            9: '信号機',
+            11: '一時停止標識'
+        }
+
+        print("\n=== True Positives の信頼度統計 ===")
+        print(f"{'クラス':^15} {'検出数':^8} {'平均':^8} {'中央値':^8} {'最小':^8} {'最大':^8}")
+        print("-" * 65)
+
+        # TPの分析
+        for class_id, boxes in self.tp_stats.items():
+            if boxes:
+                confidences = [box[-1] for box in boxes]
+                class_name = class_names.get(class_id, f'クラス{class_id}')
+                print(f"{class_name:^15} {len(boxes):^8d} {np.mean(confidences):^8.3f} "
+                      f"{np.median(confidences):^8.3f} {np.min(confidences):^8.3f} "
+                      f"{np.max(confidences):^8.3f}")
+
+        print("\n=== False Positives の信頼度統計 ===")
+        print(f"{'クラス':^15} {'検出数':^8} {'平均':^8} {'中央値':^8} {'最小':^8} {'最大':^8}")
+        print("-" * 65)
+
+        # FPの分析
+        for class_id, boxes in self.fp_stats.items():
+            if boxes:
+                confidences = [box[-1] for box in boxes]
+                class_name = class_names.get(class_id, f'クラス{class_id}')
+                print(f"{class_name:^15} {len(boxes):^8d} {np.mean(confidences):^8.3f} "
+                      f"{np.median(confidences):^8.3f} {np.min(confidences):^8.3f} "
+                      f"{np.max(confidences):^8.3f}")
+
+        # 信頼度分布の箱ひげ図（TPとFPを比較）
+        plt.figure(figsize=(12, 6))
+        data_to_plot = []
+        labels = []
+
+        for class_id in class_names.keys():
+            if class_id in self.tp_stats and self.tp_stats[class_id]:
+                tp_conf = [box[-1] for box in self.tp_stats[class_id]]
+                data_to_plot.append(tp_conf)
+                labels.append(f"{class_names[class_id]}\nTP")
+
+            if class_id in self.fp_stats and self.fp_stats[class_id]:
+                fp_conf = [box[-1] for box in self.fp_stats[class_id]]
+                data_to_plot.append(fp_conf)
+                labels.append(f"{class_names[class_id]}\nFP")
+
+        bp = plt.boxplot(data_to_plot, labels=labels)
+        plt.xticks(rotation=45)
+        plt.title('TPとFPの信頼度分布の比較')
+        plt.ylabel('信頼度')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.show()

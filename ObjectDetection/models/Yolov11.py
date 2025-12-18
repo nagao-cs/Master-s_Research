@@ -14,8 +14,9 @@ class Yolov11nDetector(AbstractObjectDetector):
 
     def load_model(self):
         try:
-            self.model = YOLO(
-                r"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\yolo11n.pt")
+            # self.model = YOLO(
+            # r"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\yolo11n.pt")
+            self.model = YOLO("yolo11n.pt")
             print(f"YOLOv11 model loaded")
 
         except Exception as e:
@@ -33,7 +34,7 @@ class Yolov11nDetector(AbstractObjectDetector):
             return []
         im_widht = image.shape[1]
         im_height = image.shape[0]
-        detections = self.model(image)
+        detections = self.model.predict(image, device="cuda")
         bboxes = list()
         bboxes = detections[0].boxes
         output = list()

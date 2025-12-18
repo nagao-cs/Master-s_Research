@@ -5,6 +5,7 @@ import csv
 from models.AbstractObjectDetector import AbstractObjectDetector
 import os
 import utils.utils as utils
+from pathlib import Path
 
 
 class Yolov8nDetector(AbstractObjectDetector):
@@ -14,8 +15,8 @@ class Yolov8nDetector(AbstractObjectDetector):
 
     def load_model(self):
         try:
-            self.model = YOLO(
-                "C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\yolov8n.pt")
+            self.model = YOLO("yolov8n.pt")
+            # self.model = YOLO('yolov8n.pt')
             print(f"YOLOv8n model loaded")
 
         except Exception as e:
@@ -32,7 +33,7 @@ class Yolov8nDetector(AbstractObjectDetector):
             return []
         im_widht = image.shape[1]
         im_height = image.shape[0]
-        detections = self.model(image)
+        detections = self.model.predict(image, device="cuda")
         bboxes = list()
         bboxes = detections[0].boxes
         output = list()

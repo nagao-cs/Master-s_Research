@@ -1,13 +1,15 @@
 from typing import List
-from . import detection_logic
+import detection_logic
 import sys
+import os
+from pathlib import Path
 sys.path.append("..")
 
 
-def save_stats(models: List[str], n_inference: int, time_elapsed: float, rule: str, threshold: float, adaptive: bool):
+def save_stats(models: List[str], n_inference: int, time_elapsed: float, rule: str, threshold: float, adaptive: bool, savedir: str):
     import os
     import json
-    output_stats_dir = rf"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\adaptive_Nversion_detector\output\stats"
+    output_stats_dir = savedir
     os.makedirs(output_stats_dir, exist_ok=True)
     model_key = '_'.join(models)
     stats = {
@@ -87,6 +89,7 @@ if __name__ == "__main__":
         default=False,
         help="Enable adaptive detection mode",
     )
+
     args = argparser.parse_args()
     print(args)
     model_names = args.models
@@ -124,13 +127,16 @@ if __name__ == "__main__":
                 f"サポートされているモデル: {', '.join(supported_models)}"
             )
         model_list.append(model)
-    input_image_dir = rf"C:\CARLA_Latest\WindowsNoEditor\output\image\{map_name}\original\front"
+    cwd = Path(os.path.dirname(__file__))
+    input_image_base_dir = cwd.parent.parent / "output" / "image"
+    input_image_dir = input_image_base_dir / \
+        f"{map_name}" / "original" / "front"
     n_inference = 0
     output_label_list = list()
     import time
     import os
     print("map: ", map_name)
-    print("model: ", model_name)
+    print("models: ", model_list)
     from logging import getLogger
     logger = getLogger('ultralytics')
     logger.disabled = True
@@ -143,7 +149,6 @@ if __name__ == "__main__":
     file_list = os.listdir(input_image_dir)
     # 計測開始
     start = time.time()
-
     for image_file in tqdm(file_list):
         image_path = os.path.join(input_image_dir, image_file)
         if image_path is None:
@@ -170,8 +175,11 @@ if __name__ == "__main__":
     print(f"total object detection time: {end - start:.2f} seconds")
 
     import cv2
-    output_image_dir = rf"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\adaptive_Nversion_detector\output\images\{map_name}\{str(adaptive)}_{rule}_{'_'.join(model_names)}"
-    output_label_dir = rf"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\adaptive_Nversion_detector\output\labels\{map_name}\{str(adaptive)}_{rule}_{'_'.join(model_names)}"
+    output_base_dir = cwd.parent / "adaptive_Nversion_detector" / "output"
+    output_image_dir = output_base_dir / "images" / \
+        f"{map_name}" / f"{str(adaptive)}_{rule}_{'_'.join(model_names)}"
+    output_label_dir = output_base_dir / "labels" / \
+        f"{map_name}" / f"{str(adaptive)}_{rule}_{'_'.join(model_names)}"
     os.makedirs(output_image_dir, exist_ok=True)
     os.makedirs(output_label_dir, exist_ok=True)
     for image_file, output_label in zip(os.listdir(input_image_dir), output_label_list):
@@ -199,4 +207,6 @@ if __name__ == "__main__":
     print(f"Total inferences made: {n_inference}")
     print("All images processed.")
     elapsed = end - start
-    save_stats(model_names, n_inference, elapsed, rule, threshold, adaptive)
+    savedir = output_base_dir / "stats"
+    save_stats(model_names, n_inference, elapsed,
+               rule, threshold, adaptive, savedir)

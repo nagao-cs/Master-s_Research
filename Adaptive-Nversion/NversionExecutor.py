@@ -20,4 +20,4 @@ class NversionExecutor:
             detections_by_model[detector] = detections
 
         integrated_detections = self.integrator(detections_by_model)
-        return integrated_detections
+        return integrated_detections, detections_by_model

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 
 class DetectionResult:
@@ -50,9 +51,14 @@ class AbstractObjectDetector:
         """検出結果を保存（共通処理）"""
         image = cv2.imread(image_path)
 
+        # BASE_DIR_WSL = Path(
+        #     "/mnt/c/CARLA_Latest/WindowsNoEditor/ReliabilityOfNversionObjectDetection/dataset/detectionresult")
+
         # 出力ディレクトリの設定
-        output_image_dir = f"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection/output/{map}/images/{model_name}/{camera}"
-        output_label_dir = f"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection/output/{map}/labels/{model_name}/{camera}"
+        cwd = Path(__file__).parent
+        output_image_dir = cwd.parent / "output" / f"{map}" / "images" / f"{model_name}" / f"{camera}"
+        output_label_dir = cwd.parent / "output" / f"{map}" / "labels" / f"{model_name}" / f"{camera}"
+        
         os.makedirs(output_image_dir, exist_ok=True)
         os.makedirs(output_label_dir, exist_ok=True)
 

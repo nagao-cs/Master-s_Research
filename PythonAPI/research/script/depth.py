@@ -37,7 +37,7 @@ def project_point(vert, K, w2c):
     return (u, v, dist)
 
 
-def is_visible_bbox(bbox, camera, K, world_2_camera, depth_map, threshold_visible=2, eps=1.0):
+def is_visible_bbox(bbox, camera, K, world_2_camera, depth_map, threshold_visible=3, eps=1.0):
     verts = [vert for vert in bbox.get_world_vertices(carla.Transform())]
     visible_count = 0
 
@@ -94,10 +94,16 @@ def main():
         default=False,
         action="store_true",
     )
+    argparser.add_argument(
+        "--n_camera",
+        type=int,
+        default=1,
+    )
     args = argparser.parse_args()
     MAP = args.map
     NUM_WALKERS = args.walker
     NUM_CAR = args.vehicle
+    NUM_CAMERA = args.n_camera
     debug = args.debug
     # === サーバに接続し、基本的なセッティング ===
     client = carla_util.connect_to_server(CARLA_HOST, CARLA_PORT, TIMEOUT)
@@ -114,6 +120,14 @@ def main():
     weather = Weather(world.get_weather())
     speed_factor = 3.0  # 天候変化の速度係数
     update_freq = 0.1 / speed_factor  # 天候更新頻度（秒）
+    # weather = world.get_weather()
+    # weather.cloudiness = 10.0
+    # weather.precipitation = 0.0
+    # weather.precipitation_deposits = 0.0
+    # weather.wetness = 0.0
+    # weather.fog_density = 0.0
+    # weather.sun_altitude_angle = 45.0  # 太陽の高度（度）
+    # world.set_weather(weather)
 
     # === NPC車両スポーン ===
     vehicles = carla_util.spawn_npc_vehicles(
@@ -145,12 +159,19 @@ def main():
             NUM_CAMERA)
 
     # === 保存用のディレクトリ作成 ===
+    from pathlib import Path
+    # OUTPUT_IMG_DIR = Path(
+    # "C:\CARLA_Latest\WindowsNoEditor\ReliabilityOfNversionObjectDetection\dataset\images")
     os.makedirs(OUTPUT_IMG_DIR, exist_ok=True)
-    image_dir = OUTPUT_IMG_DIR + f"/{MAP}"
+    image_dir = OUTPUT_IMG_DIR
     os.makedirs(image_dir, exist_ok=True)
+    # OUTPUT_LABEL_DIR = Path(
+    # "C:\CARLA_Latest\WindowsNoEditor\ReliabilityOfNversionObjectDetection\dataset\labels")
     os.makedirs(OUTPUT_LABEL_DIR, exist_ok=True)
-    label_dir = OUTPUT_LABEL_DIR + f"/{MAP}"
+    label_dir = OUTPUT_LABEL_DIR
     os.makedirs(label_dir, exist_ok=True)
+    print(f"画像出力ディレクトリ: {image_dir}")
+    print(f"ラベル出力ディレクトリ: {label_dir}")
 
     # === ターゲットオブジェクトの設定 ===
     target_objects = [
@@ -219,7 +240,8 @@ def main():
                         ray = bbox.location - camera_location
                         if camera_forward_vector.dot(ray) < 0:
                             continue
-                        if bbox.location.distance(camera.get_location()) > 100.0:
+                        dist = bbox.location.distance(camera_location)
+                        if dist > 100.0:
                             continue
                         if is_visible_bbox(bbox, camera, K, world_to_camera, depth_map, eps=0.3):
                             verts = bbox.get_world_vertices(carla.Transform())
@@ -239,11 +261,11 @@ def main():
                                 class_id = camera_util.CLASS_MAPPING.get(
                                     target, -1)
                                 visible_bboxes.append(
-                                    [class_id, x_center, y_center, width, height])
+                                    [class_id, x_center, y_center, width, height, dist])
 
                 # === 画像に視認可能なbboxを描画 ===
                 for bbox in visible_bboxes:
-                    class_id, x_center, y_center, width, height = bbox
+                    class_id, x_center, y_center, width, height, dist = bbox
                     xmin = int((x_center - width / 2) * IM_WIDTH)
                     xmax = int((x_center + width / 2) * IM_WIDTH)
                     ymin = int((y_center - height / 2) * IM_HEIGHT)
@@ -270,6 +292,9 @@ def main():
                 break
     finally:
         print("シミュレーションが終了しました。")
+        # === クリーンアップ ===
+        carla_util.cleanup(client, world, vehicles,
+                           all_actors, cameras, depth_cameras)
         # === デバッグ用に画像を表示 ===
         # carla_util.show_queue_content(original_image_ques[0], "Original Images")
         # save_start = time.time()
@@ -277,21 +302,19 @@ def main():
         if not debug:
             print("オリジナル画像を保存中")
             output_original_dir = OUTPUT_IMG_DIR + f"/{MAP}/original"
+            output_bbox_dir = OUTPUT_IMG_DIR + f"/{MAP}/bbox"
+            output_label_dir = OUTPUT_LABEL_DIR + f"/{MAP}"
+
+            print(output_original_dir, output_bbox_dir, output_label_dir)
+
             carla_util.save_images(original_image_ques,
                                    cameras, output_original_dir)
             print("バウンディングボックスを描画した画像を保存中")
-            output_bbox_dir = OUTPUT_IMG_DIR + f"/{MAP}/bbox"
             carla_util.save_images(bbox_image_ques, cameras, output_bbox_dir)
-            # === ラベルを保存 ===
             print("ラベルを保存中")
-            output_label_dir = OUTPUT_LABEL_DIR + f"/{MAP}"
             carla_util.save_labels(label_ques, cameras, output_label_dir)
             # save_end = time.time()
 
-        # === クリーンアップ ===
-        carla_util.cleanup(client, world, vehicles,
-                           all_actors, cameras, depth_cameras)
-        print("シミュレーションが終了しました。")
         cv2.destroyAllWindows()
         end = time.time()
         print(f"シミュレーションにかかった時間: {end - start:.2f}秒")

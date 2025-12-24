@@ -48,7 +48,7 @@ class SSDDetector(AbstractObjectDetector):
 
         output = list()
         for i in range(num_detections):
-            if scores[i] > 0.25:
+            if scores[i] > 0.01:
                 ymin, xmin, ymax, xmax = bboxes[i]
                 x_center = (xmin + xmax) / 2
                 y_center = (ymin + ymax) / 2

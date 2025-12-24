@@ -43,13 +43,18 @@ if __name__ == "__main__":
     )
     args = argparser.parse_args()
     models = args.models
-    gt_directory = f"C:/CARLA_Latest/WindowsNoEditor/output/label/{args.map}/front"
-    det_directories = [
-        f"C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{args.map}/labels/{model}/front" for model in models
-    ]
+
+    from pathlib import Path
+    cwd = Path(__file__).parent
+
+    gt_directory = cwd.parent / "output" / "label" / f"{args.map}" / "front"
     # det_directories = [
-    #     rf"C:\CARLA_Latest\WindowsNoEditor\ObjectDetection\adaptive_Nversion_detector\output\labels\{args.map}\True_min_conf_{'_'.join(args.models)}"
+    #     cwd.parent / "ObjectDetection" / "output" / f"{args.map}" / "labels" / f"{model}" / "front" for model in models
     # ]
+    det_directories = [
+        cwd.parent / "ObjectDetection" / "adaptive_Nversion_detector" / "output" /
+        "labels" / f"{args.map}" / f"True_min_conf_{'_'.join(args.models)}"
+    ]
 
     from dataset import dataset
     datasets = dataset.Dataset(

@@ -1,14 +1,6 @@
 import os
-import cv2
-from concurrent.futures import ThreadPoolExecutor
-from models.Yolov8n import Yolov8nDetector
-from models.Yolov11 import Yolov11nDetector
-from models.SSD import SSDDetector
-# from models.FastRCNN import FastRCNNDetector
-from models.Yolov5 import Yolov5nDetector
-from models.rtDETR import RTDETRDetector
-from models.yolov8l import Yolov8lDetector
-
+from logging import getLogger
+from pathlib import Path
 
 COCO_LABELS = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus",
@@ -34,7 +26,8 @@ if __name__ == "__main__":
         "--model",
         type=str,
         required=True,
-        choices=["yolov8n", "yolov5n", "yolov11n", "rtdetr", "ssd", "yolov8l"],
+        choices=["yolov8n", "yolov5n", "yolov11n",
+                 "rtdetr", "ssd", "yolov8l", "fastrcnn"],
         help="Model to use: yolov8n, yolo11n, ssd, fastrcnn, yolov5n, mobilenet, detr",
     )
     argparser.add_argument(
@@ -44,24 +37,39 @@ if __name__ == "__main__":
         help="Map name: Town01, Town02, etc.",
         required=True
     )
+    argparser.add_argument(
+        "--conf_threshold",
+        type=float,
+        default=0.25,
+        help="Confidence threshold for detections"
+    )
 
     args = argparser.parse_args()
     model_name = args.model
     map_name = args.map
-    conf_threshold = 0.25
+    conf_threshold = args.conf_threshold
 
     if model_name == 'yolov8n':
+        from models.Yolov8n import Yolov8nDetector
         model = Yolov8nDetector()
-    elif "yolov11n":
+    elif model_name == "yolov11n":
+        from models.Yolov11 import Yolov11nDetector
         model = Yolov11nDetector()
-    elif "yolov5n":
+    elif model_name == "yolov5n":
+        from models.Yolov5 import Yolov5nDetector
         model = Yolov5nDetector()
-    elif "rtdetr":
+    elif model_name == "rtdetr":
+        from models.rtDETR import RTDETRDetector
         model = RTDETRDetector()
-    elif 'yolov8l':
+    elif model_name == 'yolov8l':
+        from models.yolov8l import Yolov8lDetector
         model = Yolov8lDetector()
-    elif "ssd":
+    elif model_name == "ssd":
+        from models.SSD import SSDDetector
         model = SSDDetector()
+    elif model_name == "fastrcnn":
+        from models.FastRCNN import FastRCNNDetector
+        model = FastRCNNDetector()
     else:
         supported_models = ["yolov8n", "yolov11n",
                             "yolov5n", "rtdetr", "yolov8l"]
@@ -69,15 +77,25 @@ if __name__ == "__main__":
             f"モデル '{model_name}' はサポートされていません。\n"
             f"サポートされているモデル: {', '.join(supported_models)}"
         )
-    input_base_dir = "C:\CARLA_Latest\WindowsNoEditor\output\image"
+
+    from pathlib import Path
+    cwd = Path(__file__).parent
+    input_base_dir = cwd.parent / "output"
     cameras = [
         "front",
         # "left_1",
-        # "right_1"
+        # "right_1",
+        # "left_2",
+        # "right_2"
     ]
     import time
+    import tqdm
+    logger = getLogger('ultralytics')
+    logger.disabled = True
     print("map: ", map_name)
     print("model: ", model_name)
+    print(
+        f"Input images directory: {input_base_dir}/{map_name}/original/{cameras[0]}")
     start = time.time()
     for camera in cameras:
         input_images_directory = os.path.join(
@@ -86,7 +104,8 @@ if __name__ == "__main__":
             print(
                 f"Input directory does not exist: {input_images_directory}")
             continue
-        for image_file in os.listdir(input_images_directory):
+        image_files = os.listdir(input_images_directory)
+        for image_file in tqdm.tqdm(image_files):
             image_path = os.path.join(input_images_directory, image_file)
             if image_path is None:
                 print(f"Could not read image: {image_path}")

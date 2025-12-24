@@ -93,6 +93,40 @@ except IndexError:
 
 
 def main():
+    import argparse
+    argparser = argparse.ArgumentParser(
+        description="Carla Depth Camera with Object Detection")
+    argparser.add_argument(
+        "--map",
+        type=str,
+        choices=["Town01", "Town02", "Town03", "Town04", "Town05", "Town10HD"],
+        help="Map name: Town01, Town02, Town04, Town05, Town10HD",
+        required=True,
+    )
+    argparser.add_argument(
+        "--vehicle",
+        type=int,
+        default=50,
+        help="Number of vehicles to spawn",
+        required=False,
+    )
+    argparser.add_argument(
+        "--walker",
+        type=int,
+        default=50,
+        help="Number of pedestrians to spawn",
+        required=False,
+    )
+    argparser.add_argument(
+        "--debug",
+        default=False,
+        action="store_true",
+    )
+    args = argparser.parse_args()
+    MAP = args.map
+    NUM_WALKERS = args.walker
+    NUM_CAR = args.vehicle
+    debug = args.debug
     # === サーバに接続し、基本的なセッティング ===
     client = carla_util.connect_to_server(CARLA_HOST, CARLA_PORT, TIMEOUT)
     world, blueprint_library = carla_util.load_map(client, MAP)
@@ -111,13 +145,13 @@ def main():
 
     # === NPC車両スポーン ===
     vehicles = carla_util.spawn_npc_vehicles(
-        world, blueprint_library, traffic_manager, spawn_points, CAR_RATIO)
+        world, blueprint_library, traffic_manager, spawn_points, num_vehicle=NUM_CAR)
 
     # === 歩行者スポーン ===
     all_actors = carla_util.spawn_npc_pedestrians(
         world, client, blueprint_library, NUM_WALKERS)
 
-    # === Ego車両スポーン（最後） ===
+    # === Ego車両スポーン ===
     ego_bp = blueprint_library.find('vehicle.lincoln.mkz_2020')
     ego_vehicle = carla_util.spawn_Ego_vehicles(
         client, world, ego_bp, spawn_points)
@@ -148,6 +182,8 @@ def main():
     # === シミュレーション開始 ===
     ego_vehicle.set_autopilot(True)
     import time
+    frame_rate = 1.0
+    frame_count = 0.0
     idx = 0
     start = time.time()
     try:
@@ -161,97 +197,100 @@ def main():
                 weather.tick(speed_factor * elapsed_time)
                 world.set_weather(weather.weather)
                 elapsed_time = 0.0
-            # === RGBカメラと深度カメラを取得 ===
-            camera = cameras[idx]
-            depth_camera = depth_cameras[idx]
-            camera_queue = camera_image_queues[idx]
-            depth_queue = depth_queues[idx]
+            frame_count += FIXED_DELTA_SECONDS
+            if frame_rate > frame_count:
+                frame_count = 0.0
+                # === RGBカメラと深度カメラを取得 ===
+                camera = cameras[idx]
+                depth_camera = depth_cameras[idx]
+                camera_queue = camera_image_queues[idx]
+                depth_queue = depth_queues[idx]
 
-            # === RGB画像と深度画像を取得 ===
-            original_image = camera_queue.get()
-            depth_image = depth_queue.get()
+                # === RGB画像と深度画像を取得 ===
+                original_image = camera_queue.get()
+                depth_image = depth_queue.get()
 
-            # === RGB画像を変換 ===
-            # image_array = np.frombuffer(original_image.raw_data, dtype=np.uint8)
-            # original_image = image_array.reshape((original_image.height, original_image.width, 4))[:, :, :4]
-            original_image = np.reshape(np.copy(
-                original_image.raw_data), (original_image.height, original_image.width, 4))
-            bbox_image = original_image.copy()
+                # === RGB画像を変換 ===
+                # image_array = np.frombuffer(original_image.raw_data, dtype=np.uint8)
+                # original_image = image_array.reshape((original_image.height, original_image.width, 4))[:, :, :4]
+                original_image = np.reshape(np.copy(
+                    original_image.raw_data), (original_image.height, original_image.width, 4))
+                bbox_image = original_image.copy()
 
-            # === 深度画像を距離マップに変換 ===
-            depth_map = image_to_depth(depth_image)
-            # depth_show  = depth_map.copy()
-            # 最大表示距離を設定（例: 50m）
-            # max_depth = 150
-            # depth_vis = np.clip(depth_map, 0, max_depth)
-            # depth_vis = (depth_vis / max_depth * 255).astype(np.uint8)
-            # cv2.imshow(f'Depth Map {camera.attributes["role_name"]}', depth_vis)
+                # === 深度画像を距離マップに変換 ===
+                depth_map = image_to_depth(depth_image)
+                # depth_show  = depth_map.copy()
+                # 最大表示距離を設定（例: 50m）
+                # max_depth = 150
+                # depth_vis = np.clip(depth_map, 0, max_depth)
+                # depth_vis = (depth_vis / max_depth * 255).astype(np.uint8)
+                # cv2.imshow(f'Depth Map {camera.attributes["role_name"]}', depth_vis)
 
-            # === カメラの位置と向きを取得 ===
-            camera_transform = camera.get_transform()
-            camera_location = camera_transform.location
-            camera_forward_vector = camera_transform.get_forward_vector()
+                # === カメラの位置と向きを取得 ===
+                camera_transform = camera.get_transform()
+                camera_location = camera_transform.location
+                camera_forward_vector = camera_transform.get_forward_vector()
 
-            # === カメラのワールド座標系からカメラ座標系への変換行列を取得 ===
-            world_to_camera = np.array(
-                camera.get_transform().get_inverse_matrix())
+                # === カメラのワールド座標系からカメラ座標系への変換行列を取得 ===
+                world_to_camera = np.array(
+                    camera.get_transform().get_inverse_matrix())
 
-            # === 距離マップとbboxの距離から視認可能なbboxを抽出 ===
-            visible_bboxes = list()
-            for target in target_objects:
-                bboxes = world.get_level_bbs(target)
-                for bbox in bboxes:
-                    ray = bbox.location - camera_location
-                    if camera_forward_vector.dot(ray) < 0:
-                        continue
-                    if bbox.location.distance(camera.get_location()) > VALID_DISTANCE:
-                        continue
-                    if is_visible_bbox(bbox, camera, K, world_to_camera, depth_map, eps=0.3):
-                        verts = bbox.get_world_vertices(carla.Transform())
-                        points_2d_on_image = []
-                        for vert in verts:
-                            p = camera_util.get_image_point(
-                                vert, K, world_to_camera)
-                            if p is not None:
-                                points_2d_on_image.append(p)
-                        yolo_bbox = camera_util.calculate_yolo_bbox(
-                            points_2d_on_image, IM_WIDTH, IM_HEIGHT)
-                        if yolo_bbox:
-                            # xmin, xmax, ymin, ymax = yolo_bbox
-                            # class_id = CLASS_MAPPING.get(target, -1)
-                            # size = (xmax - xmin) * (ymax - ymin)
-                            # if size < SIZE_THRESHOLD:
-                            #     continue
-                            # visible_bboxes.append(
-                            #     [class_id, xmin, xmax, ymin, ymax])
-                            x_center, y_center, width, height = yolo_bbox
-                            size = width*IM_WIDTH * height*IM_HEIGHT
-                            if size < SIZE_THRESHOLD:
-                                continue
-                            class_id = camera_util.CLASS_MAPPING.get(
-                                target, -1)
-                            visible_bboxes.append(
-                                [class_id, x_center, y_center, width, height])
+                # === 距離マップとbboxの距離から視認可能なbboxを抽出 ===
+                visible_bboxes = list()
+                for target in target_objects:
+                    bboxes = world.get_level_bbs(target)
+                    for bbox in bboxes:
+                        ray = bbox.location - camera_location
+                        if camera_forward_vector.dot(ray) < 0:
+                            continue
+                        if bbox.location.distance(camera.get_location()) > VALID_DISTANCE:
+                            continue
+                        if is_visible_bbox(bbox, camera, K, world_to_camera, depth_map, eps=0.3):
+                            verts = bbox.get_world_vertices(carla.Transform())
+                            points_2d_on_image = []
+                            for vert in verts:
+                                p = camera_util.get_image_point(
+                                    vert, K, world_to_camera)
+                                if p is not None:
+                                    points_2d_on_image.append(p)
+                            yolo_bbox = camera_util.calculate_yolo_bbox(
+                                points_2d_on_image, IM_WIDTH, IM_HEIGHT)
+                            if yolo_bbox:
+                                # xmin, xmax, ymin, ymax = yolo_bbox
+                                # class_id = CLASS_MAPPING.get(target, -1)
+                                # size = (xmax - xmin) * (ymax - ymin)
+                                # if size < SIZE_THRESHOLD:
+                                #     continue
+                                # visible_bboxes.append(
+                                #     [class_id, xmin, xmax, ymin, ymax])
+                                x_center, y_center, width, height = yolo_bbox
+                                size = width*IM_WIDTH * height*IM_HEIGHT
+                                # if size < SIZE_THRESHOLD:
+                                #     continue
+                                class_id = camera_util.CLASS_MAPPING.get(
+                                    target, -1)
+                                visible_bboxes.append(
+                                    [class_id, x_center, y_center, width, height])
 
-            # === 画像に視認可能なbboxを描画 ===
-            for bbox in visible_bboxes:
-                class_id, x_center, y_center, width, height = bbox
-                xmin = int((x_center - width / 2) * IM_WIDTH)
-                xmax = int((x_center + width / 2) * IM_WIDTH)
-                ymin = int((y_center - height / 2) * IM_HEIGHT)
-                ymax = int((y_center + height / 2) * IM_HEIGHT)
-                cv2.rectangle(bbox_image, (xmin, ymin),
-                              (xmax, ymax), (0, 255, 0), 2)
-                cv2.putText(bbox_image, f'{class_id}', (xmin, ymin - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                # === 画像に視認可能なbboxを描画 ===
+                for bbox in visible_bboxes:
+                    class_id, x_center, y_center, width, height = bbox
+                    xmin = int((x_center - width / 2) * IM_WIDTH)
+                    xmax = int((x_center + width / 2) * IM_WIDTH)
+                    ymin = int((y_center - height / 2) * IM_HEIGHT)
+                    ymax = int((y_center + height / 2) * IM_HEIGHT)
+                    cv2.rectangle(bbox_image, (xmin, ymin),
+                                  (xmax, ymax), (0, 255, 0), 2)
+                    cv2.putText(bbox_image, f'{class_id}', (xmin, ymin - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-            # === 画像を表示 ===
-            display_name = f'{camera.attributes["role_name"]} with Bounding Boxes'
-            cv2.imshow(display_name, bbox_image)
+                # === 画像を表示 ===
+                display_name = f'{camera.attributes["role_name"]} with Bounding Boxes'
+                cv2.imshow(display_name, bbox_image)
 
-            # 元画像、バウンディングボックス画像、ラベルを保存用キューに追加
-            # original_images.append(original_image)
-            # labels.append(visible_bboxes)
+                # 元画像、バウンディングボックス画像、ラベルを保存用キューに追加
+                # original_images.append(original_image)
+                # labels.append(visible_bboxes)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 print("ユーザーによりシミュレーションが停止されました。")
                 break
@@ -272,8 +311,9 @@ def main():
         end = time.time()
         print(f"シミュレーションにかかった時間: {end - start:.2f}秒")
 
-
         # print(f"画像保存にかかった時間: {save_end - save_start:.2f}秒")
+
+
 if __name__ == '__main__':
     from utils.config import *
     from utils import carla_util, camera_util

@@ -1,8 +1,11 @@
+from utils import dataset, classify, utils
+from pathlib import Path
 import os
-import pickle
-import utils
-from utils import classify
-from utils import dataset
+import sys
+
+# Evaluationディレクトリへのパスを取得
+root_dir = Path(__file__).resolve().parent.parent
+sys.path.append(str(root_dir))
 
 
 class Evaluation:
@@ -46,6 +49,41 @@ class Evaluation:
         cer_od = 1 - (cer_od/self.dataset.num_frame)
         # print(f"avg_all_fp = {avg_all_fp/self.dataset.num_frame}")
         return cer_od
+
+    def best_adaptive_cov_od(self):
+        total_objs = self.dataset.total_obj_list
+        common_fps = self.dataset.common_fp_list
+        common_fns = self.dataset.common_fn_list
+        adaptive_cov_od = 0.0
+        count_inference = 0
+        for frame in range(self.dataset.num_frame):
+            num_gt = self.dataset.num_gt_list[frame]
+            results = self.dataset.results
+            for version in range(self.dataset.num_version):
+                model_result = results[version][frame]
+                num_fp = sum(len(bboxes)
+                             for bboxes in model_result['FP'].values())
+                num_fn = sum(len(bboxes)
+                             for bboxes in model_result['FN'].values())
+                if num_fp + num_fn == 0:
+                    adaptive_cov_od += 0
+                    count_inference += 1
+                    break
+            else:
+                frame_obj = total_objs[frame]
+                frame_common_fp = common_fps[frame]
+                frame_common_fn = common_fns[frame]
+                num_fp = sum(len(bboxes)
+                             for bboxes in frame_common_fp.values())
+                num_fn = sum(len(bboxes)
+                             for bboxes in frame_common_fn.values())
+                adaptive_cov_od += (num_fp + num_fn) / \
+                    frame_obj if frame_obj > 0 else 0
+                count_inference += self.dataset.num_version
+        adaptive_cov_od = 1 - (adaptive_cov_od/self.dataset.num_frame)
+        print(
+            f"        best 推論回数: {count_inference}")
+        return adaptive_cov_od
 
     def gt_based_adaptive_cov_od(self, threshold):
         total_objs = self.dataset.total_obj_list
@@ -324,11 +362,12 @@ if __name__ == "__main__":
         f'C:/CARLA_Latest/WindowsNoEditor/ObjectDetection/output/{map}/labels/{model}/front' for model in models]
     ds = dataset.Dataset(gt_dir, det_dirs, version, debug)
     eval_instance = Evaluation(ds)
+    print(f"    best_adaptive_cov_od: {eval_instance.best_adaptive_cov_od()}")
     # print(f"    cov_od: {Evaluation(ds).cov_od()}")
     # print(
     # f"    gt_based_adaptive_cov_od: {Evaluation(ds).gt_based_adaptive_cov_od()}")
-    # print(
-    # f"    detection_based_adaptive_cov_od: {Evaluation(ds).detect_based_adaptive_cov_od(numobj_threshold)}")
+    print(
+        f"    detection_based_adaptive_cov_od: {Evaluation(ds).detect_based_adaptive_cov_od(numobj_threshold)}")
     # print(
     # f"    topK conf cov_od: {Evaluation(ds).conf_adaptive_cov_od(k, conf_threshold)}")
     print()
@@ -418,64 +457,64 @@ if __name__ == "__main__":
 
     # plt.show()
     # 閾値とCOV-OD, CER-OD, 推論回数の関係を評価
-    thresholds = range(1, 21)
-    cov_od_values = []
-    cer_od_values = []
-    detection_counts = []
+#     thresholds = range(1, 21)
+#     cov_od_values = []
+#     cer_od_values = []
+#     detection_counts = []
 
-    eval_instance = Evaluation(ds)
-    for threshold in thresholds:
-        cov_od = eval_instance.gt_based_adaptive_cov_od(threshold)
-        cer_od, detection_count = eval_instance.gt_based_adaptive_cer_od(
-            threshold)
-        # 推論回数を計算（実装に応じて修正が必要）
+#     eval_instance = Evaluation(ds)
+#     for threshold in thresholds:
+#         cov_od = eval_instance.gt_based_adaptive_cov_od(threshold)
+#         cer_od, detection_count = eval_instance.gt_based_adaptive_cer_od(
+#             threshold)
+#         # 推論回数を計算（実装に応じて修正が必要）
 
-        cov_od_values.append(cov_od)
-        cer_od_values.append(cer_od)
-        detection_counts.append(detection_count)
-        print(
-            f"閾値 {threshold}: COV-OD = {cov_od:.4f}, CER-OD = {cer_od:.4f}, 推論回数 = {detection_count}")
+#         cov_od_values.append(cov_od)
+#         cer_od_values.append(cer_od)
+#         detection_counts.append(detection_count)
+#         print(
+#             f"閾値 {threshold}: COV-OD = {cov_od:.4f}, CER-OD = {cer_od:.4f}, 推論回数 = {detection_count}")
 
-    # グラフの描画（2つのサブプロット）
-    fig, (ax1, ax2) = plt.subplots(
-        2, 1, figsize=(12, 10), height_ratios=[2, 1])
+#     # グラフの描画（2つのサブプロット）
+#     fig, (ax1, ax2) = plt.subplots(
+#         2, 1, figsize=(12, 10), height_ratios=[2, 1])
 
-    # 上部プロット（COV-ODとCER-OD）
-    ax1.plot(thresholds, cov_od_values, 'b-o',
-             linewidth=2, markersize=8, label='COV-OD')
-    ax1.plot(thresholds, cer_od_values, 'r-^',
-             linewidth=2, markersize=8, label='CER-OD')
-    ax1.grid(True, alpha=0.3)
-    ax1.set_title(
-        "Number of Object Threshold & Detection based CovOD/CerOD", fontsize=14)
-    ax1.set_ylabel("Value", fontsize=12)
-    ax1.set_ylim(0, 1)
-    ax1.legend(fontsize=12)
+#     # 上部プロット（COV-ODとCER-OD）
+#     ax1.plot(thresholds, cov_od_values, 'b-o',
+#              linewidth=2, markersize=8, label='COV-OD')
+#     ax1.plot(thresholds, cer_od_values, 'r-^',
+#              linewidth=2, markersize=8, label='CER-OD')
+#     ax1.grid(True, alpha=0.3)
+#     ax1.set_title(
+#         "Number of Object Threshold & Detection based CovOD/CerOD", fontsize=14)
+#     ax1.set_ylabel("Value", fontsize=12)
+#     ax1.set_ylim(0, 1)
+#     ax1.legend(fontsize=12)
 
-    # データ点の値を表示（上部プロット）
-    for x, y1, y2 in zip(thresholds, cov_od_values, cer_od_values):
-        ax1.annotate(f'{y1:.3f}', (x, y1), textcoords="offset points",
-                     xytext=(0, 10), ha='center', color='blue')
-        ax1.annotate(f'{y2:.3f}', (x, y2), textcoords="offset points",
-                     xytext=(0, -20), ha='center', color='red')
-   # 下部プロット（推論回数）
-    ax2.bar(thresholds, detection_counts, color='green', alpha=0.6)
-    ax2.grid(True, alpha=0.3)
-    ax2.set_xlabel("Num obj threshold", fontsize=12)
-    ax2.set_ylabel("inference count", fontsize=12)
+#     # データ点の値を表示（上部プロット）
+#     for x, y1, y2 in zip(thresholds, cov_od_values, cer_od_values):
+#         ax1.annotate(f'{y1:.3f}', (x, y1), textcoords="offset points",
+#                      xytext=(0, 10), ha='center', color='blue')
+#         ax1.annotate(f'{y2:.3f}', (x, y2), textcoords="offset points",
+#                      xytext=(0, -20), ha='center', color='red')
+#    # 下部プロット（推論回数）
+#     ax2.bar(thresholds, detection_counts, color='green', alpha=0.6)
+#     ax2.grid(True, alpha=0.3)
+#     ax2.set_xlabel("Num obj threshold", fontsize=12)
+#     ax2.set_ylabel("inference count", fontsize=12)
 
-    # データ点の値を表示（下部プロット）
-    for x, y in zip(thresholds, detection_counts):
-        ax2.annotate(f'{y}', (x, y), textcoords="offset points",
-                     xytext=(0, 5), ha='center', color='darkgreen')
+#     # データ点の値を表示（下部プロット）
+#     for x, y in zip(thresholds, detection_counts):
+#         ax2.annotate(f'{y}', (x, y), textcoords="offset points",
+#                      xytext=(0, 5), ha='center', color='darkgreen')
 
-    # x軸の整数値を強制（両方のプロット）
-    ax1.set_xticks(thresholds)
-    ax2.set_xticks(thresholds)
+#     # x軸の整数値を強制（両方のプロット）
+#     ax1.set_xticks(thresholds)
+#     ax2.set_xticks(thresholds)
 
-    plt.tight_layout()
+#     plt.tight_layout()
 
-    # グラフの保存（オプション）
-    # plt.savefig('adaptive_threshold_analysis_with_counts.png', dpi=300, bbox_inches='tight')
+#     # グラフの保存（オプション）
+#     # plt.savefig('adaptive_threshold_analysis_with_counts.png', dpi=300, bbox_inches='tight')
 
-    plt.show()
+#     plt.show()

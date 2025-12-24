@@ -42,3 +42,4 @@ __pycache__/
 /ObjectDetection/adaptive_Nversion_detector/output
 /ReliabilityOfNversionObjectDetection
 /test
+/Evaluation/.evaluation-env

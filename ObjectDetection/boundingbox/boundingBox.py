@@ -47,7 +47,7 @@ class BoundingBox:
 
         intersection_area = (interXMax - interXMin) * \
             (interYMax - interYMin)
-        union_area = self.compute_area() + boundingbox.compute_area() - intersection_area
+        union_area = self.computeArea() + boundingbox.computeArea() - intersection_area
 
         iou = intersection_area / union_area
 

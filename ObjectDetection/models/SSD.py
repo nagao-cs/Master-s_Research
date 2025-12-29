@@ -1,9 +1,9 @@
 import tensorflow_hub as hub
 import cv2
 import numpy as np
-from models.AbstractObjectDetector import AbstractObjectDetector
+from .AbstractObjectDetector import AbstractObjectDetector
 import tensorflow as tf
-import utils.utils as utils
+from ..utils import utils
 
 
 class SSDDetector(AbstractObjectDetector):

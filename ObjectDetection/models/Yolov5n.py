@@ -1,10 +1,8 @@
 from ultralytics import YOLO
 import cv2
 import numpy as np
-import csv
-from models.AbstractObjectDetector import AbstractObjectDetector
-import os
-import utils.utils as utils
+from .AbstractObjectDetector import AbstractObjectDetector
+from ..utils import utils
 
 
 class Yolov5nDetector(AbstractObjectDetector):

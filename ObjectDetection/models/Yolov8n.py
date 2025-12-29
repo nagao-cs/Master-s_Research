@@ -2,9 +2,10 @@ from ultralytics import YOLO
 import cv2
 import numpy as np
 import csv
-from models.AbstractObjectDetector import AbstractObjectDetector
+from .AbstractObjectDetector import AbstractObjectDetector
+# from models.AbstractObjectDetector import AbstractObjectDetector
 import os
-import utils.utils as utils
+from ..utils import utils
 from pathlib import Path
 
 
@@ -16,7 +17,6 @@ class Yolov8nDetector(AbstractObjectDetector):
     def load_model(self):
         try:
             self.model = YOLO("yolov8n.pt")
-            # self.model = YOLO('yolov8n.pt')
             print(f"YOLOv8n model loaded")
 
         except Exception as e:

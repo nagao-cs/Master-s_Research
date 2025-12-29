@@ -1,10 +1,9 @@
 import tensorflow_hub as hub
 import cv2
 import numpy as np
-from models.AbstractObjectDetector import AbstractObjectDetector
 import tensorflow as tf
-import torchvision
-from torchvision.models.detection import fasterrcnn_resnet50_fpn
+from .AbstractObjectDetector import AbstractObjectDetector
+from ..utils import utils
 
 
 class FastRCNNDetector(AbstractObjectDetector):

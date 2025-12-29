@@ -1,9 +1,8 @@
 from ultralytics import RTDETR
 import cv2
 import numpy as np
-from models.AbstractObjectDetector import AbstractObjectDetector
-import os
-import utils.utils as utils
+from .AbstractObjectDetector import AbstractObjectDetector
+from ..utils import utils
 
 
 class RTDETRDetector(AbstractObjectDetector):

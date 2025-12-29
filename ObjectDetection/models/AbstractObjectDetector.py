@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
+import cv2
+from boundingbox.boundingBox import BoundingBox
 
 
 class DetectionResult:
@@ -21,62 +23,61 @@ class AbstractObjectDetector:
     def predict(self, image):
         pass
 
-    def draw_bbox(self, image, bboxes):
-        import cv2
-        im_width = image.shape[1]
-        im_height = image.shape[0]
-        for bbox in bboxes:
-            x_center = bbox['x_center'] * im_width
-            y_center = bbox['y_center'] * im_height
-            width = bbox['width'] * im_width
-            height = bbox['height'] * im_height
-            xmin = int(x_center - width / 2)
-            xmax = int(x_center + width / 2)
-            ymin = int(y_center - height / 2)
-            ymax = int(y_center + height / 2)
-            label = bbox['label']
-            conf = bbox['confidence']
-            x_center = (xmin + xmax) / 2
-            y_center = (ymin + ymax) / 2
+    def _drawBoundingBox(self, image, boundingBoxList: list[BoundingBox]):
+        imageWidth = image.shape[1]
+        imageHeight = image.shape[0]
+        for boundingBox in boundingBoxList:
+            absoluteXCenter = boundingBox.xCenter * imageWidth
+            absoluteYCenter = boundingBox.yCenter * imageHeight
+            absoluteWidth = boundingBox.width * imageWidth
+            absoluteHeight = boundingBox.height * imageHeight
 
-            cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-            text = f"{label} {conf:.2f}"
-            cv2.putText(image, text, (xmin, ymin - 10),
+            absoluteXMin = int(absoluteXCenter - absoluteWidth / 2)
+            absoluteXMax = int(absoluteXCenter + absoluteWidth / 2)
+            absoluteYMin = int(absoluteYCenter - absoluteHeight / 2)
+            absoluteYMax = int(absoluteYCenter + absoluteHeight / 2)
+
+            label = boundingBox.classId
+            confidenceScore = boundingBox.confidenceScore
+
+            cv2.rectangle(image, (absoluteXMin, absoluteYMin),
+                          (absoluteXMax, absoluteYMax), (0, 255, 0), 2)
+            text = f"{label} {confidenceScore:.2f}"
+            cv2.putText(image, text, (absoluteXMin, absoluteYMin - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         return image
 
-    def save_result(self, image_path, bboxes, map, camera, index, model_name):
+    def save_result(self, imagePath: str, boundingBoxList: list[BoundingBox], mapName: str, camera, index, modelName: str):
         import os
         import cv2
         """検出結果を保存（共通処理）"""
-        image = cv2.imread(image_path)
-
-        # BASE_DIR_WSL = Path(
-        #     "/mnt/c/CARLA_Latest/WindowsNoEditor/ReliabilityOfNversionObjectDetection/dataset/detectionresult")
+        image = cv2.imread(imagePath)
 
         # 出力ディレクトリの設定
         cwd = Path(__file__).parent
-        output_image_dir = cwd.parent / "output" / f"{map}" / "images" / f"{model_name}" / f"{camera}"
-        output_label_dir = cwd.parent / "output" / f"{map}" / "labels" / f"{model_name}" / f"{camera}"
-        
-        os.makedirs(output_image_dir, exist_ok=True)
-        os.makedirs(output_label_dir, exist_ok=True)
+        outputImageDir = cwd.parent / "detectionResult" / \
+            f"{mapName}" / "images" / f"{modelName}" / f"{camera}"
+        outputLabelDir = cwd.parent / "detectionResult" / \
+            f"{mapName}" / "labels" / f"{modelName}" / f"{camera}"
+
+        os.makedirs(outputImageDir, exist_ok=True)
+        os.makedirs(outputLabelDir, exist_ok=True)
 
         # 画像の保存
-        bbox_image = self.draw_bbox(image, bboxes)
-        output_image_path = os.path.join(output_image_dir, f"{index}.png")
-        cv2.imwrite(output_image_path, bbox_image)
+        boundingBoxImage = self._drawBoundingBox(image, boundingBoxList)
+        outputImagePath = os.path.join(outputImageDir, f"{index}.png")
+        cv2.imwrite(outputImagePath, boundingBoxImage)
 
         # ラベルの保存
-        output_label_path = os.path.join(output_label_dir, f"{index}.txt")
-        with open(output_label_path, 'w') as f:
-            for bbox in bboxes:
-                x_center = bbox['x_center']
-                y_center = bbox['y_center']
-                width = bbox['width']
-                height = bbox['height']
-                conf = bbox['confidence']
-                label = bbox['label']
-                class_id = bbox['class_id']
+        outputLabelPath = os.path.join(outputLabelDir, f"{index}.txt")
+        with open(outputLabelPath, 'w') as f:
+            for boundingBox in boundingBoxList:
+                xCenter = boundingBox.xCenter
+                yCenter = boundingBox.yCenter
+                width = boundingBox.width
+                height = boundingBox.height
+                confidenceScore = boundingBox.confidenceScore
+                label = boundingBox.label
+                classId = boundingBox.classId
                 f.write(
-                    f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f} {conf:.6f}\n")
+                    f"{classId} {xCenter:.6f} {yCenter:.6f} {width:.6f} {height:.6f} {confidenceScore:.6f}\n")

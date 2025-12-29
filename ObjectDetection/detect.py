@@ -1,6 +1,8 @@
 import os
 from logging import getLogger
 from pathlib import Path
+import time
+import tqdm
 
 COCO_LABELS = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus",
@@ -46,7 +48,7 @@ if __name__ == "__main__":
 
     args = argparser.parse_args()
     model_name = args.model
-    map_name = args.map
+    mapName = args.map
     conf_threshold = args.conf_threshold
 
     if model_name == 'yolov8n':
@@ -78,9 +80,8 @@ if __name__ == "__main__":
             f"サポートされているモデル: {', '.join(supported_models)}"
         )
 
-    from pathlib import Path
     cwd = Path(__file__).parent
-    input_base_dir = cwd.parent / "output"
+    inputBaseDir = cwd.parent / "output" / "image"
     cameras = [
         "front",
         # "left_1",
@@ -88,34 +89,33 @@ if __name__ == "__main__":
         # "left_2",
         # "right_2"
     ]
-    import time
-    import tqdm
+
     logger = getLogger('ultralytics')
     logger.disabled = True
-    print("map: ", map_name)
+
+    print("map: ", mapName)
     print("model: ", model_name)
     print(
-        f"Input images directory: {input_base_dir}/{map_name}/original/{cameras[0]}")
+        f"Input images directory: {inputBaseDir}/{mapName}/original/{cameras[0]}")
+
     start = time.time()
     for camera in cameras:
-        input_images_directory = os.path.join(
-            input_base_dir, map_name, "original", camera)
-        if not os.path.exists(input_images_directory):
-            print(
-                f"Input directory does not exist: {input_images_directory}")
-            continue
-        image_files = os.listdir(input_images_directory)
-        for image_file in tqdm.tqdm(image_files):
-            image_path = os.path.join(input_images_directory, image_file)
-            if image_path is None:
-                print(f"Could not read image: {image_path}")
-                continue
-            bboxes = model.predict(image_path)
-            index = image_file.split('.')[0]
+        inputImageDirectory = os.path.join(
+            inputBaseDir, mapName, "original", camera)
+        if not os.path.exists(inputImageDirectory):
+            raise RuntimeError(
+                f"Input directory does not exist: {inputImageDirectory}")
+        imageFiles = os.listdir(inputImageDirectory)
+        for imageFile in tqdm.tqdm(imageFiles):
+            imagePath = os.path.join(inputImageDirectory, imageFile)
+            if not os.path.exists(imagePath):
+                raise FileExistsError(
+                    f"Input image does not exist: {imagePath}")
+            bboxes = model.predict(imagePath)
+            index = imageFile.split('.')[0]
             model.save_result(
-                image_path, bboxes, map_name, camera, index, model_name
+                imagePath, bboxes, mapName, camera, index, model_name
             )
-            # print(f"Processed {image_file} for camera {camera}")
     end = time.time()
     print(f"total object detection time: {end - start:.2f} seconds")
     print("All images processed.")

@@ -53,10 +53,10 @@ if __name__ == "__main__":
         from models.Yolov8n import Yolov8nDetector
         model = Yolov8nDetector()
     elif model_name == "yolov11n":
-        from models.Yolov11 import Yolov11nDetector
+        from ObjectDetection.models.Yolov11n import Yolov11nDetector
         model = Yolov11nDetector()
     elif model_name == "yolov5n":
-        from models.Yolov5 import Yolov5nDetector
+        from ObjectDetection.models.Yolov5n import Yolov5nDetector
         model = Yolov5nDetector()
     elif model_name == "rtdetr":
         from models.rtDETR import RTDETRDetector

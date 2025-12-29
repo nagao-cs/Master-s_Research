@@ -2,12 +2,13 @@ from typing import Optional
 
 
 class BoundingBox:
-    def __init__(self, xCenter: float, yCenter: float, width: float, height: float, classId: int, confidenceScore: Optional[float] = None):
+    def __init__(self, xCenter: float, yCenter: float, width: float, height: float, classId: int, label: str, confidenceScore: Optional[float] = None):
         self.xCenter = xCenter
         self.yCenter = yCenter
         self.width = width
         self.height = height
         self.classId = classId
+        self.label = label
         self.confidenceScore = confidenceScore
 
     def computeArea(self) -> float:

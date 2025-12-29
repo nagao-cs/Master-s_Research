@@ -101,8 +101,8 @@ if __name__ == "__main__":
 
     model_list = list()
     from models.Yolov8n import Yolov8nDetector
-    from models.Yolov11 import Yolov11nDetector
-    from models.Yolov5 import Yolov5nDetector
+    from ObjectDetection.models.Yolov11n import Yolov11nDetector
+    from ObjectDetection.models.Yolov5n import Yolov5nDetector
     from models.rtDETR import RTDETRDetector
     from models.yolov8l import Yolov8lDetector
     from models.SSD import SSDDetector

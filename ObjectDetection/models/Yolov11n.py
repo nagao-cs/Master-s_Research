@@ -1,22 +1,23 @@
 from ultralytics import YOLO
 import cv2
-from models.AbstractObjectDetector import AbstractObjectDetector
-import utils.utils as utils
+import numpy as np
+from .AbstractObjectDetector import AbstractObjectDetector
+from utils import utils
 from boundingbox.boundingBox import BoundingBox
 
 
-class Yolov8lDetector(AbstractObjectDetector):
+class Yolov11nDetector(AbstractObjectDetector):
     def __init__(self):
         self.model = None
         self.load_model()
 
     def load_model(self):
         try:
-            self.model = YOLO("yolov8l.pt")
-            print(f"YOLOv8l model loaded")
+            self.model = YOLO("yolo11n.pt")
+            print(f"YOLOv11 model loaded")
 
         except Exception as e:
-            raise RuntimeError(f"Error loading yolov8l model: {e}")
+            raise RuntimeError(f"Error loading yolov11n model: {e}")
 
     def predict(self, imagePath):
         image = cv2.imread(imagePath)

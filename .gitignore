@@ -10,8 +10,6 @@
 /PythonAPI/examples
 /PythonAPI/util
 __pycache__/
-/PythonAPI/research/scripts/__pycache__/
-/PythonAPI/research/utils/__pycache__/
 *.pyc
 /CarlaUE4.exe
 /Dockerfile
@@ -21,6 +19,7 @@ __pycache__/
 /ObjectDetection/yolov8n.pt
 /ObjectDetection/requirement.txt
 /ObjectDetection/output
+/ObjectDetection/detectionResult
 /output
 /scenario_runner-*
 /CHANGELOG
@@ -29,7 +28,6 @@ __pycache__/
 /進捗報告
 /Evaluation/*.pkl
 /detection-env
-/new_detection_env
 /raw_dataset/dataset
 /raw_dataset/images
 /raw_dataset/labels

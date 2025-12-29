@@ -16,17 +16,12 @@ class Yolov8nDetector(AbstractObjectDetector):
             print(f"YOLOv8n model loaded")
 
         except Exception as e:
-            print(f"Error loading YOLOv8n model: {e}")
-            self.model = None
+            raise RuntimeError(f"Error loading yolov8n model: {e}")
 
-    def predict(self, image):
-        if self.model is None:
-            print("Model is not loaded")
-            return []
-        image = cv2.imread(image)
+    def predict(self, imagePath):
+        image = cv2.imread(imagePath)
         if image is None:
-            print(f"Could not read image: {image}")
-            return []
+            raise FileExistsError(f"Could not read image: {imagePath}")
 
         imageWidth = image.shape[1]
         imageHeight = image.shape[0]

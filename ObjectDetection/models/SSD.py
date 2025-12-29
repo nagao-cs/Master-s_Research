@@ -3,7 +3,8 @@ import cv2
 import numpy as np
 from .AbstractObjectDetector import AbstractObjectDetector
 import tensorflow as tf
-from ..utils import utils
+from utils import utils
+from boundingbox.boundingBox import BoundingBox
 
 
 class SSDDetector(AbstractObjectDetector):
@@ -17,21 +18,16 @@ class SSDDetector(AbstractObjectDetector):
                 "https://www.kaggle.com/models/tensorflow/ssd-mobilenet-v2/TensorFlow2/ssd-mobilenet-v2/1")
             print(f"SSD model loaded")
         except Exception as e:
-            print(f"Error loading SSD model: {e}")
-            self.model = None
+            raise RuntimeError(f"Error loading SSD model: {e}")
 
-    def predict(self, image_path):
-        if self.model is None:
-            print("Model is not loaded")
-            return []
-        image = cv2.imread(image_path)
+    def predict(self, imagePath):
+        image = cv2.imread(imagePath)
         if image is None:
-            print(f"Could not read image: {image_path}")
-            return []
+            raise FileExistsError(f"Could not read image: {imagePath}")
 
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = cv2.resize(image, (320, 320))
-        image = np.array(image, dtype=np.uint8)
+        RGBImage = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        ResizedImage = cv2.resize(RGBImage, (320, 320))
+        image = np.array(ResizedImage, dtype=np.uint8)
         image_tensor = tf.convert_to_tensor(image)
         image_tensor = tf.expand_dims(image_tensor, axis=0)
 
@@ -46,30 +42,24 @@ class SSDDetector(AbstractObjectDetector):
             :num_detections]
         scores = detections['detection_scores'][0].numpy()[:num_detections]
 
-        output = list()
+        outputBoundingBoxList = list()
         for i in range(num_detections):
-            if scores[i] > 0.01:
-                ymin, xmin, ymax, xmax = bboxes[i]
-                x_center = (xmin + xmax) / 2
-                y_center = (ymin + ymax) / 2
-                width = xmax - xmin
-                height = ymax - ymin
+            ymin, xmin, ymax, xmax = bboxes[i]
+            xCenter = (xmin + xmax) / 2
+            yCenter = (ymin + ymax) / 2
+            width = xmax - xmin
+            height = ymax - ymin
 
-                size = width * height * (800 * 600)
-                if size < utils.SIZE_THRESHOLD:
-                    continue
+            size = width * height * (800 * 600)
+            if size < utils.SIZE_THRESHOLD:
+                continue
 
-                class_id = classes[i] - 1
-                conf = scores[i]
-                # label = utils.COCO_LABELS[class_id]
-                label = class_id
-                output.append({
-                    'x_center': x_center,
-                    'y_center': y_center,
-                    'width': width,
-                    'height': height,
-                    'class_id': class_id,
-                    'confidence': conf,
-                    'label': label
-                })
-        return output
+            classId = classes[i] - 1
+            confidenceScore = scores[i]
+            label = utils.COCO_LABELS.get(classId, 'unknown')
+
+            boundingBoxInstance = BoundingBox(
+                xCenter, yCenter, width, height, classId, label, confidenceScore)
+            # label = class_id
+            outputBoundingBoxList.append(boundingBoxInstance)
+        return outputBoundingBoxList

@@ -42,3 +42,4 @@ __pycache__/
 /test
 /Evaluation/.evaluation-env
 /cuda-repo-wsl-ubuntu*
+/.vscode

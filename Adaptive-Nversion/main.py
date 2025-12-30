@@ -1,3 +1,6 @@
+from integrator import MajorityIntegrator
+from VersionController import VersionController, VersionState
+from NversionExecutor import NversionExecutor
 from typing import List
 import os
 from pathlib import Path
@@ -5,9 +8,9 @@ import time
 import os
 from tqdm import tqdm
 
-from NversionExecutor import NversionExecutor
-from VersionController import VersionController, VersionState
-from integrator import MajorityIntegrator
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 if __name__ == "__main__":
@@ -30,26 +33,12 @@ if __name__ == "__main__":
         help="Map name: Town01, Town02, etc.",
         required=True
     )
-    argparser.add_argument(
-        "--rule",
-        type=str,
-        choices=["n_det", "min_conf"],
-        default="min_conf",
-    )
-    argparser.add_argument(
-        "--threshold",
-        type=float,
-        default=0.5,
-    )
 
     args = argparser.parse_args()
     print(args)
     model_names = args.models
     n_model = len(model_names)
     map_name = args.map
-    rule = args.rule
-    threshold = args.threshold
-    adaptive = args.adaptive
 
     model_list = list()
 
@@ -58,10 +47,10 @@ if __name__ == "__main__":
             from ObjectDetection.models.Yolov8n import Yolov8nDetector
             model = Yolov8nDetector()
         elif model_name == "yolov11n":
-            from ObjectDetection.models.Yolov11 import Yolov11nDetector
+            from ObjectDetection.models.Yolov11n import Yolov11nDetector
             model = Yolov11nDetector()
         elif model_name == "yolov5n":
-            from ObjectDetection.models.Yolov5 import Yolov5nDetector
+            from ObjectDetection.models.Yolov5n import Yolov5nDetector
             model = Yolov5nDetector()
         elif model_name == "rtdetr":
             from ObjectDetection.models.rtDETR import RTDETRDetector
@@ -103,9 +92,15 @@ if __name__ == "__main__":
 
     file_list = os.listdir(input_image_dir)
 
-    integrator = MajorityIntegrator()
-    executor = NversionExecutor(integrator)
-    controller = VersionController(conf_threshold=0.5, agreement_threshold=0.9)
+    CONF_THRESHOLD = 0.5
+    AGREEMENT_THRESHOLD = 0.8
+
+    numVersion = len(model_list)
+
+    integrator = MajorityIntegrator(iou_th=0.5, maxVersion=numVersion)
+    executor = NversionExecutor(model_list, integrator)
+    controller = VersionController(
+        conf_threshold=CONF_THRESHOLD, agreement_threshold=AGREEMENT_THRESHOLD, maxVersion=numVersion)
 
     # 計測開始
     start = time.time()

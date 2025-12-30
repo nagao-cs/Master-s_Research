@@ -1,8 +1,8 @@
 from ultralytics import YOLO
 import cv2
 from .AbstractObjectDetector import AbstractObjectDetector
-from utils import utils
-from boundingbox.boundingBox import BoundingBox
+from ..utils import utils
+from ..boundingbox.boundingBox import BoundingBox
 
 
 class Yolov8nDetector(AbstractObjectDetector):

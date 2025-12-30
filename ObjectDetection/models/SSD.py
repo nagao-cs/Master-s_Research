@@ -3,8 +3,8 @@ import cv2
 import numpy as np
 from .AbstractObjectDetector import AbstractObjectDetector
 import tensorflow as tf
-from utils import utils
-from boundingbox.boundingBox import BoundingBox
+from ..utils import utils
+from ..boundingbox.boundingBox import BoundingBox
 
 
 class SSDDetector(AbstractObjectDetector):

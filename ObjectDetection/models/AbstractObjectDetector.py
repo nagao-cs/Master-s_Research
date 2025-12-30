@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 import cv2
-from boundingbox.boundingBox import BoundingBox
+from ..boundingbox.boundingBox import BoundingBox
 
 
 class DetectionResult:

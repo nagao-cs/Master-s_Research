@@ -1,7 +1,7 @@
 class NversionExecutor:
-    def __init__(self, integrator: object):
-        self.detectors: list = list()
-        self.base_detector: object = None
+    def __init__(self, detectors: list, integrator: object):
+        self.detectors: list = detectors
+        self.base_detector: object = detectors[0]
         self.integrator = integrator
 
     def add_detector(self, detector: object):

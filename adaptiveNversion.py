@@ -4,7 +4,7 @@ from tqdm import tqdm
 import time
 from pathlib import Path
 import os
-from typing import List
+import argparse
 
 from adaptiveNversion.NversionExecutor import NversionExecutor
 from adaptiveNversion.versionController.VersionController import VersionController, VersionState
@@ -14,7 +14,6 @@ from ObjectDetection.boundingbox.boundingBox import BoundingBox
 
 
 if __name__ == "__main__":
-    import argparse
     argparser = argparse.ArgumentParser(
         description="Adaptive Object Detection"
     )
@@ -37,11 +36,11 @@ if __name__ == "__main__":
     args = argparser.parse_args()
     print(args)
 
-    modelNames = args.models
-    numModel = len(modelNames)
-    mapName = args.map
+    modelNames: list[str] = args.models
+    numModel: int = len(modelNames)
+    mapName: str = args.map
 
-    modelList = list()
+    modelList: list[object] = list()
 
     for modelName in modelNames:
         if modelName == "yolov8n":
@@ -71,13 +70,13 @@ if __name__ == "__main__":
             )
         modelList.append(model)
 
-    cwd = Path(__file__).parent
+    cwd: Path = Path(__file__).parent
 
-    inputImageDir = cwd / "output" / "image" / \
+    inputImageDir: Path = cwd / "output" / "image" / \
         f"{mapName}" / "original" / "front"
 
-    numInference = 0
-    outputLabelList: list[list[BoundingBox]] = list()
+    numInference: int = 0
+    outputDetectionList: list[list[BoundingBox]] = list()
 
     print("map: ", mapName)
     print("models: ", modelList)
@@ -89,11 +88,11 @@ if __name__ == "__main__":
         raise FileNotFoundError(
             f"Input directory does not exist: {inputImageDir},\n execution file is {Path(__file__)}")
 
-    inputFileList = os.listdir(inputImageDir)
+    inputFileList: list[str] = os.listdir(inputImageDir)
 
     CONF_THRESHOLD = 0.5
     IOU_THRESHOLD = 0.5
-    AGREEMENT_THRESHOLD = 0.8
+    AGREEMENT_THRESHOLD = 0.5
 
     numVersion = len(modelList)
 
@@ -106,7 +105,7 @@ if __name__ == "__main__":
     # 計測開始
     start = time.time()
     for inputFile in tqdm(inputFileList):
-        inputImagePath = os.path.join(inputImageDir, inputFile)
+        inputImagePath: Path = inputImageDir / inputFile
         if not os.path.exists(inputImagePath):
             raise FileNotFoundError(f"{inputImagePath} does not exist")
 
@@ -131,30 +130,28 @@ if __name__ == "__main__":
             finalDetections = integratedBoundingBoxList
             numInference += len(modelList)
 
-        outputLabelList.append(finalDetections)
+        outputDetectionList.append(finalDetections)
 
     # 計測終了
     end = time.time()
     print(f"total object detection time: {end - start:.2f} seconds")
 
-    outputLabelDir = cwd / "detectionResult" / "labels" / \
+    outputLabelDir = cwd / "adaptiveDetectionResult" / "labels" / \
         f"{mapName}" / f"{'_'.join(modelNames)}"
     os.makedirs(outputLabelDir, exist_ok=True)
 
     index = 0
-    for outputLabel in outputLabelList:
-        outputLabelPath = os.path.join(outputLabelDir, f"{index:6f}.txt")
-        with open(outputLabelPath, 'w') as f:
-            for bbox in outputLabel:
-                x_center = bbox['x_center']
-                y_center = bbox['y_center']
-                width = bbox['width']
-                height = bbox['height']
-                class_id = bbox['class_id']
-                conf = bbox['confidence']
-                f.write(
-                    f"{class_id} {x_center} {y_center} {width} {height} {conf}\n")
+    for outputLabelList in outputDetectionList:
+        outputLabelPath = outputLabelDir / f"{index:06}.txt"
+        with open(outputLabelPath, 'w') as outputFile:
+            for boundingBox in outputLabelList:
+                xCenter = boundingBox.xCenter
+                yCenter = boundingBox.yCenter
+                width = boundingBox.width
+                height = boundingBox.height
+                classId = boundingBox.classId
+                confidenceScore = boundingBox.confidenceScore
+                outputFile.write(
+                    f"{classId} {xCenter} {yCenter} {width} {height} {confidenceScore}\n")
         index += 1
     print(f"Total inferences made: {numInference}")
-    elapsed = end - start
-    print("total time:", elapsed)

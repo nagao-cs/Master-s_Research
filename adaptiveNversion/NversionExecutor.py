@@ -1,5 +1,5 @@
 from .integrator import MajorityIntegrator
-from ObjectDetection.boundingbox.boundingBox import BoundingBox
+from boundingBox.boundingBox import DetectionBoundingBox
 
 
 class NversionExecutor:
@@ -14,13 +14,14 @@ class NversionExecutor:
     def setBaseDetector(self, detector: object):
         self.baseDetector = detector
 
-    def executeOneVersionDetection(self, imagePath: str) -> list[BoundingBox]:
+    def executeOneVersionDetection(self, imagePath: str) -> list[DetectionBoundingBox]:
         return self.baseDetector.predict(imagePath)
 
-    def executeNVersionDetection(self, imagePath: str) -> tuple[list[BoundingBox], list[list[BoundingBox]]]:
-        detectionsModelDict: dict[object, list[BoundingBox]] = dict()
+    def executeNVersionDetection(self, imagePath: str) -> tuple[list[DetectionBoundingBox], list[list[DetectionBoundingBox]]]:
+        detectionsModelDict: dict[object, list[DetectionBoundingBox]] = dict()
         for detector in self.detectors:
-            detections: list[BoundingBox] = detector.predict(imagePath)
+            detections: list[DetectionBoundingBox] = detector.predict(
+                imagePath)
             detectionsModelDict[detector] = detections
 
         integratedBoundingBoxList, groupedBoudingBoxList = self.detectionIntegrator(

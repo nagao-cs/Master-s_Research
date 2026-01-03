@@ -10,8 +10,7 @@ from adaptiveNversion.NversionExecutor import NversionExecutor
 from adaptiveNversion.versionController.VersionController import VersionController, VersionState
 from adaptiveNversion.integrator import MajorityIntegrator
 
-from ObjectDetection.boundingbox.boundingBox import BoundingBox
-
+from boundingBox.boundingBox import DetectionBoundingBox
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(
@@ -76,7 +75,7 @@ if __name__ == "__main__":
         f"{mapName}" / "original" / "front"
 
     numInference: int = 0
-    outputDetectionList: list[list[BoundingBox]] = list()
+    outputDetectionList: list[list[DetectionBoundingBox]] = list()
 
     print("map: ", mapName)
     print("models: ", modelList)
@@ -94,16 +93,17 @@ if __name__ == "__main__":
     IOU_THRESHOLD = 0.5
     AGREEMENT_THRESHOLD = 0.5
 
-    numVersion = len(modelList)
+    numVersion: int = len(modelList)
 
-    detectionIntegrator = MajorityIntegrator(
+    detectionIntegrator: MajorityIntegrator = MajorityIntegrator(
         iouThreshold=IOU_THRESHOLD, maxVersion=numVersion)
-    detectionExecutor = NversionExecutor(modelList, detectionIntegrator)
-    versionController = VersionController(
+    detectionExecutor: NversionExecutor = NversionExecutor(
+        modelList, detectionIntegrator)
+    versionController: VersionController = VersionController(
         confidenceScoreThreshold=CONF_THRESHOLD, agreementScoreThreshold=AGREEMENT_THRESHOLD, maxVersion=numVersion)
 
     # 計測開始
-    start = time.time()
+    start: float = time.time()
     for inputFile in tqdm(inputFileList):
         inputImagePath: Path = inputImageDir / inputFile
         if not os.path.exists(inputImagePath):
@@ -133,14 +133,14 @@ if __name__ == "__main__":
         outputDetectionList.append(finalDetections)
 
     # 計測終了
-    end = time.time()
+    end: float = time.time()
     print(f"total object detection time: {end - start:.2f} seconds")
 
-    outputLabelDir = cwd / "adaptiveDetectionResult" / "labels" / \
+    outputLabelDir: Path = cwd / "adaptiveDetectionResult" / "labels" / \
         f"{mapName}" / f"{'_'.join(modelNames)}"
     os.makedirs(outputLabelDir, exist_ok=True)
 
-    index = 0
+    index: int = 0
     for outputLabelList in outputDetectionList:
         outputLabelPath = outputLabelDir / f"{index:06}.txt"
         with open(outputLabelPath, 'w') as outputFile:

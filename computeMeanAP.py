@@ -69,13 +69,13 @@ if __name__ == '__main__':
         detectionBoundingBoxList: list[DetectionBoundingBox] = fileReader.convertDetectionFileToBoundingBoxList(
             detectionFilePath)
 
-        classifiedBoundingBoxListPerFrame = detectionClassifier.classify(
+        classifiedBoundingBoxListPerFrame: list[ClassifiedBoundingBox] = detectionClassifier.classify(
             groundTruthBoundingBoxList, detectionBoundingBoxList)
 
         classifiedBoundingBoxList.extend(classifiedBoundingBoxListPerFrame)
 
     # boundingboxListを信頼度スコアで並べ替える
-    sortedClassifiedBoundingBoxList = sorted(
+    sortedClassifiedBoundingBoxList: list[ClassifiedBoundingBox] = sorted(
         classifiedBoundingBoxList, key=lambda boundingbox: boundingbox.confidenceScore, reverse=True)
 
     # mAPを計算する

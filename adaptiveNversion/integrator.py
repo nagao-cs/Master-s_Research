@@ -1,6 +1,6 @@
 from typing import Dict, List, Any, Tuple, Optional
 from math import ceil
-from ObjectDetection.boundingbox.boundingBox import BoundingBox
+from boundingBox.boundingBox import DetectionBoundingBox
 
 
 class MajorityIntegrator:
@@ -8,7 +8,7 @@ class MajorityIntegrator:
         self.iouThreshold = iouThreshold
         self.majorityThreshold = ceil(maxVersion/2)
 
-    def _findBestMatchBoundingBoxIndex(self, targetBoundingBox: BoundingBox, subjectBoundingBoxList: list[BoundingBox], subjectBoundingBoxIsProcessedList: list[bool]) -> Optional[int]:
+    def _findBestMatchBoundingBoxIndex(self, targetBoundingBox: DetectionBoundingBox, subjectBoundingBoxList: list[DetectionBoundingBox], subjectBoundingBoxIsProcessedList: list[bool]) -> Optional[int]:
         """
         _findBestMatchBoundingBoxIndex の Docstring
 
@@ -23,7 +23,7 @@ class MajorityIntegrator:
         :rtype: int | None
         """
         bestIou = 0.0
-        bestMatchBoundingBox: Optional[BoundingBox] = None
+        bestMatchBoundingBox: Optional[DetectionBoundingBox] = None
         bestMatchBoundingBoxIndex: int = -1
         for index, subjectBoundingBox in enumerate(subjectBoundingBoxList):
             if subjectBoundingBoxIsProcessedList[index] == True:
@@ -32,7 +32,7 @@ class MajorityIntegrator:
             if targetBoundingBox.classId != subjectBoundingBox.classId:
                 continue
 
-            currentIou = targetBoundingBox.computeIou(subjectBoundingBox)
+            currentIou = targetBoundingBox.computeIoU(subjectBoundingBox)
             if (currentIou > self.iouThreshold) and (currentIou > bestIou):
                 bestIou = currentIou
                 bestMatchBoundingBox = targetBoundingBox
@@ -40,7 +40,7 @@ class MajorityIntegrator:
 
         return bestMatchBoundingBoxIndex
 
-    def groupingDetections(self, detectionModelDict: dict[object, list[BoundingBox]]) -> list[list[BoundingBox]]:
+    def groupingDetections(self, detectionModelDict: dict[object, list[DetectionBoundingBox]]) -> list[list[DetectionBoundingBox]]:
         """
         groupingDetections の Docstring
 
@@ -60,7 +60,8 @@ class MajorityIntegrator:
                 if isProcessedListDict[targetDetector][targetBoundingBoxIndex] == True:
                     continue
 
-                groupedBoundingBox: list[BoundingBox] = [targetBoundingBox]
+                groupedBoundingBox: list[DetectionBoundingBox] = [
+                    targetBoundingBox]
                 isProcessedListDict[targetDetector][targetBoundingBoxIndex] = True
                 for subjectDetector, subjectBoundingBoxList in detectionModelDict.items():
                     if targetDetector == subjectDetector:
@@ -78,7 +79,7 @@ class MajorityIntegrator:
                 groupedBoundingBoxList.append(groupedBoundingBox)
         return groupedBoundingBoxList
 
-    def _averageBoundingBox(self, boungingBoxList: list[BoundingBox]) -> BoundingBox:
+    def _averageBoundingBox(self, boungingBoxList: list[DetectionBoundingBox]) -> DetectionBoundingBox:
         """
         _averageBoundingBox の Docstring
 
@@ -111,12 +112,12 @@ class MajorityIntegrator:
         classId = boungingBoxList[0].classId
         label = boungingBoxList[0].label
 
-        averagedBoundingBox = BoundingBox(
+        averagedBoundingBox = DetectionBoundingBox(
             averageXCenter, averageYCenter, averageWidth, averageHeight, classId, label, averageConfidenceScore)
 
         return averagedBoundingBox
 
-    def integrate(self, groupedBoundingBoxList) -> list[BoundingBox]:
+    def integrate(self, groupedBoundingBoxList) -> list[DetectionBoundingBox]:
         """
         integrate の Docstring
 
@@ -125,22 +126,22 @@ class MajorityIntegrator:
         :return: 説明
         :rtype: list[BoundingBox]
         """
-        integratedBoundingBoxList: list[BoundingBox] = list()
+        integratedBoundingBoxList: list[DetectionBoundingBox] = list()
 
         for groupedBoundingBox in groupedBoundingBoxList:
             if len(groupedBoundingBox) < self.majorityThreshold:
                 continue
 
-            averagedBoundingBox: BoundingBox = self._averageBoundingBox(
+            averagedBoundingBox: DetectionBoundingBox = self._averageBoundingBox(
                 groupedBoundingBox)
             integratedBoundingBoxList.append(averagedBoundingBox)
 
         return integratedBoundingBoxList
 
-    def __call__(self, detectionModelDict: dict[object, list[BoundingBox]]) -> tuple[list[BoundingBox], list[list[BoundingBox]]]:
+    def __call__(self, detectionModelDict: dict[object, list[DetectionBoundingBox]]) -> tuple[list[DetectionBoundingBox], list[list[DetectionBoundingBox]]]:
         # groupingDetections() で前処理してから integrate() を呼ぶ
-        groupedBoundingBoxList: list[list[BoundingBox]
+        groupedBoundingBoxList: list[list[DetectionBoundingBox]
                                      ] = self.groupingDetections(detectionModelDict)
-        integratedBoundingBoxList: list[BoundingBox] = self.integrate(
+        integratedBoundingBoxList: list[DetectionBoundingBox] = self.integrate(
             groupedBoundingBoxList)
         return integratedBoundingBoxList, groupedBoundingBoxList

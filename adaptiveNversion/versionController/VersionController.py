@@ -1,6 +1,8 @@
 from enum import Enum
-from typing import Dict, List, Tuple, Optional
-from ObjectDetection.boundingbox.boundingBox import BoundingBox
+from typing import Optional
+import sys
+
+from boundingBox.boundingBox import DetectionBoundingBox
 
 
 class VersionState(Enum):
@@ -15,7 +17,7 @@ class VersionController:
         self.agreementScoreThreshold = agreementScoreThreshold
         self.maxVersion = maxVersion
 
-    def updateState(self, detections: Optional[list[BoundingBox]] = None, groupedBoundingBoxList: Optional[list[list[BoundingBox]]] = None):
+    def updateState(self, detections: Optional[list[DetectionBoundingBox]] = None, groupedBoundingBoxList: Optional[list[list[DetectionBoundingBox]]] = None):
         """
         detections:
           - ONE状態: 1モデルの検出結果
@@ -29,18 +31,24 @@ class VersionController:
             if self._shouldSwitchToOneVersion(groupedBoundingBoxList):
                 self.state = VersionState.ONE
 
-    def _shouldSwitchToNversion(self, boundingBoxList: list[BoundingBox]) -> bool:
+    def outputCurrentStateAtConsole(self):
+        currentState = self.state
+        status = "SINGLE" if currentState == VersionState.ONE else "MULTI"
+        sys.stdout.write(f"\r[{status:6s}] Currently executing...")
+        sys.stdout.flush()
+
+    def _shouldSwitchToNversion(self, boundingBoxList: list[DetectionBoundingBox]) -> bool:
         minConfidenceScore: float = 1.0
         for boundingBox in boundingBoxList:
             confidenceScore = boundingBox.confidenceScore
             minConfidenceScore = min(minConfidenceScore, confidenceScore)
         return minConfidenceScore < self.confidenceScoreThreshold
 
-    def _shouldSwitchToOneVersion(self, groupedBoundingBoxList: list[list[BoundingBox]]) -> bool:
+    def _shouldSwitchToOneVersion(self, groupedBoundingBoxList: list[list[DetectionBoundingBox]]) -> bool:
         agreementScore = self._calcAgreementScore(groupedBoundingBoxList)
         return agreementScore > self.agreementScoreThreshold
 
-    def _calcAgreementScore(self, groupedBoundingBoxList: list[list[BoundingBox]]) -> float:
+    def _calcAgreementScore(self, groupedBoundingBoxList: list[list[DetectionBoundingBox]]) -> float:
         agreementScore = 0.0
 
         if groupedBoundingBoxList == None:

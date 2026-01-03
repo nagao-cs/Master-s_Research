@@ -109,20 +109,20 @@ if __name__ == "__main__":
         if not os.path.exists(inputImagePath):
             raise FileNotFoundError(f"{inputImagePath} does not exist")
 
-        versionState = versionController.state
-        if versionState == VersionState.ONE:
+        if versionController.state == VersionState.ONE:
             baseDetection = detectionExecutor.executeOneVersionDetection(
                 inputImagePath)
             versionController.updateState(detections=baseDetection)
 
-            if versionState == VersionState.N:
-                finalDetections = detectionExecutor.executeNVersionDetection(
-                    inputImagePath, baseDetection)
+            if versionController.state == VersionState.N:
+                integratedBoundingBoxList, groupedBoundingBoxList = detectionExecutor.executeNVersionDetection(
+                    inputImagePath)
+                finalDetections = integratedBoundingBoxList
                 numInference += len(modelList)
-            else:
+            elif versionController.state == VersionState.ONE:
                 finalDetections = baseDetection
                 numInference += 1
-        else:
+        elif versionController.state == VersionState.N:
             integratedBoundingBoxList, groupedBoundingBoxList = detectionExecutor.executeNVersionDetection(
                 inputImagePath)
             versionController.updateState(

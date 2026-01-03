@@ -5,8 +5,8 @@ from boundingBox.boundingBox import DetectionBoundingBox
 class NversionExecutor:
     def __init__(self, detectors: list, detectionIntegrator: MajorityIntegrator):
         self.detectors: list = detectors
-        self.baseDetector: object = detectors[0]
         self.detectionIntegrator: MajorityIntegrator = detectionIntegrator
+        self.setBaseDetector(detectors[0])
 
     def addDetector(self, detector: object):
         self.detectors.append(detector)

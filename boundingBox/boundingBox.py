@@ -16,20 +16,20 @@ class BoundingBox(ABC):
         if self.classId != boundingBox.classId:
             return 0.0
 
-        aXMin = self.xCenter - self.width / 2
-        aXMax = self.xCenter + self.width / 2
-        aYMin = self.yCenter - self.height / 2
-        aYMax = self.yCenter + self.height / 2
+        thisBoxXMin = self.xCenter - self.width / 2
+        thisBoxXMax = self.xCenter + self.width / 2
+        thisBoxYMin = self.yCenter - self.height / 2
+        thisBoxYMax = self.yCenter + self.height / 2
 
-        bXMin = boundingBox.xCenter - boundingBox.width / 2
-        bXMax = boundingBox.xCenter + boundingBox.width / 2
-        bYMin = boundingBox.yCenter - boundingBox.height / 2
-        bYMax = boundingBox.yCenter + boundingBox.height / 2
+        targetBoxXMin = boundingBox.xCenter - boundingBox.width / 2
+        targetBoxXMax = boundingBox.xCenter + boundingBox.width / 2
+        targetBoxYMin = boundingBox.yCenter - boundingBox.height / 2
+        targetBoxYMax = boundingBox.yCenter + boundingBox.height / 2
 
-        interXMin = max(aXMin, bXMin)
-        interYMin = max(aYMin, bYMin)
-        interXMax = min(aXMax, bXMax)
-        interYMax = min(aYMax, bYMax)
+        interXMin = max(thisBoxXMin, targetBoxXMin)
+        interYMin = max(thisBoxYMin, targetBoxYMin)
+        interXMax = min(thisBoxXMax, targetBoxXMax)
+        interYMax = min(thisBoxYMax, targetBoxYMax)
 
         if (interXMin >= interXMax) or (interYMin >= interYMax):
             return 0.0

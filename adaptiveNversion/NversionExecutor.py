@@ -17,6 +17,21 @@ class NversionExecutor:
     def executeOneVersionDetection(self, imagePath: str) -> list[DetectionBoundingBox]:
         return self.baseDetector.predict(imagePath)
 
+    def executeNMinusOneVersionDetection(self, imagePath: str, baseDetection: list[DetectionBoundingBox]) -> list[DetectionBoundingBox]:
+        detectionsModelDict: dict[object, list[DetectionBoundingBox]] = {
+            self.baseDetector: baseDetection}
+
+        for detector in self.detectors:
+            if detector == self.baseDetector:
+                continue
+            detections: list[DetectionBoundingBox] = detector.predict(
+                imagePath)
+            detectionsModelDict[detector] = detections
+
+        integratedBoundingBoxList, groupedBoudingBoxList = self.detectionIntegrator(
+            detectionsModelDict)
+        return integratedBoundingBoxList, groupedBoudingBoxList
+
     def executeNVersionDetection(self, imagePath: str) -> tuple[list[DetectionBoundingBox], list[list[DetectionBoundingBox]]]:
         detectionsModelDict: dict[object, list[DetectionBoundingBox]] = dict()
         for detector in self.detectors:

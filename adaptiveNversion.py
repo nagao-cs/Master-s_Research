@@ -75,7 +75,6 @@ if __name__ == "__main__":
     inputImageDir: Path = cwd / "output" / "image" / \
         f"{mapName}" / "original" / "front"
 
-    numInference: int = 0
     outputDetectionList: list[list[DetectionBoundingBox]] = list()
 
     print("map: ", mapName)
@@ -159,7 +158,6 @@ if __name__ == "__main__":
                 outputFile.write(
                     f"{classId} {xCenter} {yCenter} {width} {height} {confidenceScore}\n")
         index += 1
-    print(f"Total inferences made: {numInference}")
 
     outputStatsFilePath: Path = cwd / "adaptiveDetectionResult" / "resultStats.csv"
     statesRecorder.writeStatsToCsvFile(

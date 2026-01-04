@@ -9,6 +9,7 @@ import argparse
 from adaptiveNversion.NversionExecutor import NversionExecutor
 from adaptiveNversion.versionController.VersionController import VersionController, VersionState
 from adaptiveNversion.integrator import MajorityIntegrator
+from adaptiveNversion.statsRecorder import StatsRecorder
 
 from boundingBox.boundingBox import DetectionBoundingBox
 
@@ -35,13 +36,13 @@ if __name__ == "__main__":
     args = argparser.parse_args()
     print(args)
 
-    modelNames: list[str] = args.models
-    numModel: int = len(modelNames)
+    modelNameList: list[str] = args.models
+    numModel: int = len(modelNameList)
     mapName: str = args.map
 
     modelList: list[object] = list()
 
-    for modelName in modelNames:
+    for modelName in modelNameList:
         if modelName == "yolov8n":
             from ObjectDetection.models.Yolov8n import Yolov8nDetector
             model = Yolov8nDetector()
@@ -101,6 +102,7 @@ if __name__ == "__main__":
         modelList, detectionIntegrator)
     versionController: VersionController = VersionController(
         confidenceScoreThreshold=CONF_THRESHOLD, agreementScoreThreshold=AGREEMENT_THRESHOLD, maxVersion=numVersion)
+    statesRecorder = StatsRecorder(modelNameList=modelNameList)
 
     # 計測開始
     start: float = time.time()
@@ -115,29 +117,32 @@ if __name__ == "__main__":
             versionController.updateState(detections=baseDetection)
 
             if versionController.state == VersionState.N:
-                integratedBoundingBoxList, groupedBoundingBoxList = detectionExecutor.executeNVersionDetection(
-                    inputImagePath)
+                integratedBoundingBoxList, groupedBoundingBoxList = detectionExecutor.executeNMinusOneVersionDetection(
+                    inputImagePath, baseDetection)
                 finalDetections = integratedBoundingBoxList
-                numInference += len(modelList)
             elif versionController.state == VersionState.ONE:
                 finalDetections = baseDetection
-                numInference += 1
+            executeState = versionController.state
         elif versionController.state == VersionState.N:
+            executeState = versionController.state
             integratedBoundingBoxList, groupedBoundingBoxList = detectionExecutor.executeNVersionDetection(
                 inputImagePath)
             versionController.updateState(
                 groupedBoundingBoxList=groupedBoundingBoxList)
             finalDetections = integratedBoundingBoxList
-            numInference += len(modelList)
+
+        statesRecorder.update(executeState)
 
         outputDetectionList.append(finalDetections)
 
     # 計測終了
     end: float = time.time()
+    executionTime: float = end - start
+    statesRecorder.registerExecutionTime(executionTime)
     print(f"total object detection time: {end - start:.2f} seconds")
 
     outputLabelDir: Path = cwd / "adaptiveDetectionResult" / "labels" / \
-        f"{mapName}" / f"{'_'.join(modelNames)}"
+        f"{mapName}" / f"{'_'.join(modelNameList)}"
     os.makedirs(outputLabelDir, exist_ok=True)
 
     index: int = 0
@@ -155,3 +160,7 @@ if __name__ == "__main__":
                     f"{classId} {xCenter} {yCenter} {width} {height} {confidenceScore}\n")
         index += 1
     print(f"Total inferences made: {numInference}")
+
+    outputStatsFilePath: Path = cwd / "adaptiveDetectionResult" / "resultStats.csv"
+    statesRecorder.writeStatsToCsvFile(
+        statsWriteCsvFilePath=outputStatsFilePath)

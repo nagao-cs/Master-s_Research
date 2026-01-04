@@ -4,7 +4,7 @@ import numpy as np
 from .AbstractObjectDetector import AbstractObjectDetector
 import tensorflow as tf
 from ..utils import utils
-from ..boundingbox.boundingBox import BoundingBox
+from boundingBox.boundingBox import DetectionBoundingBox
 
 
 class SSDDetector(AbstractObjectDetector):
@@ -24,6 +24,8 @@ class SSDDetector(AbstractObjectDetector):
         image = cv2.imread(imagePath)
         if image is None:
             raise FileExistsError(f"Could not read image: {imagePath}")
+        imageWidth: int = image.shape[1]
+        imageHeight: int = image.shape[0]
 
         RGBImage = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         ResizedImage = cv2.resize(RGBImage, (320, 320))
@@ -44,22 +46,26 @@ class SSDDetector(AbstractObjectDetector):
 
         outputBoundingBoxList = list()
         for i in range(num_detections):
+            confidenceScore = scores[i]
+            # if confidenceScore < utils.CONF_THRESHOLD:
+            # continue
+            if confidenceScore < 0.5:
+                continue
+
             ymin, xmin, ymax, xmax = bboxes[i]
             xCenter = (xmin + xmax) / 2
             yCenter = (ymin + ymax) / 2
             width = xmax - xmin
             height = ymax - ymin
 
-            size = width * height * (800 * 600)
+            size = width * imageWidth * height * imageHeight
             if size < utils.SIZE_THRESHOLD:
                 continue
 
             classId = classes[i] - 1
-            confidenceScore = scores[i]
             label = utils.COCO_LABELS.get(classId, 'unknown')
 
-            boundingBoxInstance = BoundingBox(
+            boundingBoxInstance = DetectionBoundingBox(
                 xCenter, yCenter, width, height, classId, label, confidenceScore)
-            # label = class_id
             outputBoundingBoxList.append(boundingBoxInstance)
         return outputBoundingBoxList

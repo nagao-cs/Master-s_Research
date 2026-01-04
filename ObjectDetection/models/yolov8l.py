@@ -2,7 +2,7 @@ from ultralytics import YOLO
 import cv2
 from models.AbstractObjectDetector import AbstractObjectDetector
 from ..utils import utils
-from ..boundingbox.boundingBox import BoundingBox
+from boundingBox.boundingBox import DetectionBoundingBox
 
 
 class Yolov8lDetector(AbstractObjectDetector):
@@ -31,24 +31,27 @@ class Yolov8lDetector(AbstractObjectDetector):
 
         outputBoundingBoxList = list()
         for boundingBox in boundingBoxList:
-            if boundingBox.conf > utils.CONF_THRESHOLD:
-                xmin, ymin, xmax, ymax = boundingBox.xyxy[0].tolist()
-                size = (xmax - xmin) * (ymax - ymin)
-                if size < utils.SIZE_THRESHOLD:
-                    continue
-                xmin, xmax, ymin, ymax = xmin/imageWidth, xmax / \
-                    imageWidth, ymin/imageHeight, ymax/imageHeight
-                xCenter = (xmin + xmax) / 2
-                yCenter = (ymin + ymax) / 2
-                width = xmax - xmin
-                height = ymax - ymin
-                classId = int(boundingBox.cls[0])
-                confidencescore = boundingBox.conf[0].item()
-                label = self.model.names[classId] if classId < len(
-                    self.model.names) else 'unknown'
+            if boundingBox.conf < utils.CONF_THRESHOLD:
+                continue
 
-                boundingBoxInstance = BoundingBox(
-                    xCenter, yCenter, width, height, classId, label, confidencescore)
-                outputBoundingBoxList.append(boundingBoxInstance)
+            xmin, ymin, xmax, ymax = boundingBox.xyxy[0].tolist()
+            size = (xmax - xmin) * (ymax - ymin)
+            if size < utils.SIZE_THRESHOLD:
+                continue
+
+            xmin, xmax, ymin, ymax = xmin/imageWidth, xmax / \
+                imageWidth, ymin/imageHeight, ymax/imageHeight
+            xCenter = (xmin + xmax) / 2
+            yCenter = (ymin + ymax) / 2
+            width = xmax - xmin
+            height = ymax - ymin
+            classId = int(boundingBox.cls[0])
+            confidencescore = boundingBox.conf[0].item()
+            label = self.model.names[classId] if classId < len(
+                self.model.names) else 'unknown'
+
+            boundingBoxInstance = DetectionBoundingBox(
+                xCenter, yCenter, width, height, classId, label, confidencescore)
+            outputBoundingBoxList.append(boundingBoxInstance)
 
         return outputBoundingBoxList

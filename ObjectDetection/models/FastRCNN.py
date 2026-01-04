@@ -3,8 +3,8 @@ import cv2
 import numpy as np
 import tensorflow as tf
 from .AbstractObjectDetector import AbstractObjectDetector
-from utils import utils
-from boundingbox.boundingBox import BoundingBox
+from ..utils import utils
+from boundingBox.boundingBox import DetectionBoundingBox
 
 
 class FastRCNNDetector(AbstractObjectDetector):
@@ -52,6 +52,10 @@ class FastRCNNDetector(AbstractObjectDetector):
         outputBoundingBoxList = list()
 
         for i in range(num_detections):
+            confidenceScore = float(scores[i])
+            if confidenceScore < utils.CONF_THRESHOLD:
+                continue
+
             # 検出結果（リサイズ後の画像座標）
             ymin_resized, xmin_resized, ymax_resized, xmax_resized = bboxes[i]
 
@@ -63,6 +67,9 @@ class FastRCNNDetector(AbstractObjectDetector):
             xmax = xmax_resized * scale_x
             ymin = ymin_resized * scale_y
             ymax = ymax_resized * scale_y
+            size = (xmax - xmin) * (ymax - ymin)
+            if size < utils.SIZE_THRESHOLD:
+                continue
 
             # ピクセル座標 -> 正規化座標（YOLO形式）
             xCenter = ((xmin + xmax) / 2) / orig_width
@@ -77,10 +84,9 @@ class FastRCNNDetector(AbstractObjectDetector):
                 continue
 
             classId = classes[i] - 1
-            confidenceScore = float(scores[i])
             label = utils.COCO_LABELS.get(classId, 'unknown')
 
-            boundingBoxInstance = BoundingBox(
+            boundingBoxInstance = DetectionBoundingBox(
                 xCenter, yCenter, width, height, classId, label, confidenceScore)
 
             outputBoundingBoxList.append(boundingBoxInstance)

@@ -44,13 +44,12 @@ class BoundingBox(ABC):
 
 
 class DetectionBoundingBox(BoundingBox):
-    def __init__(self, xCenter: float, yCenter: float, width: float, height: float, classId: int, label: str, confidenceScore: float):
+    def __init__(self, xCenter: float, yCenter: float, width: float, height: float, classId: int, confidenceScore: float):
         self.xCenter = xCenter
         self.yCenter = yCenter
         self.width = width
         self.height = height
         self.classId = classId
-        self.label = label
         self.confidenceScore = confidenceScore
 
 
@@ -71,13 +70,12 @@ class ClassifyCategory(Enum):
 
 
 class ClassifiedBoundingBox(BoundingBox):
-    def __init__(self, xCenter: float, yCenter: float, width: float, height: float, classId: int, label: str, confidenceScore: Optional[float], classifyCategory: ClassifyCategory):
+    def __init__(self, xCenter: float, yCenter: float, width: float, height: float, classId: int, confidenceScore: Optional[float], classifyCategory: ClassifyCategory):
         self.xCenter = xCenter
         self.yCenter = yCenter
         self.width = width
         self.height = height
         self.classId = classId
-        self.label = label
         if confidenceScore == None:
             self.confidenceScore = 0.0
         else:

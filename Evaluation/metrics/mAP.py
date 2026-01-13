@@ -59,30 +59,34 @@ def computeAP(targetClassId: int, targetBoundingBoxList: list[ClassifiedBounding
     recallList: np.array[np.float32] = numTruePositiveList / \
         numGroundTruthBoundingBox
 
-    # 0 で始まる Recall と Precision を追加（11-point補間の基点）
+    # point補間の基点
     recallList = np.concatenate([np.array([0.0]), recallList])
-    precisionList = np.concatenate([np.array([0.0]), precisionList])
+    precisionList = np.concatenate([np.array([1.0]), precisionList])
 
     for i in range(len(precisionList) - 1, 0, -1):
         precisionList[i-1] = max(precisionList[i-1], precisionList[i])
 
     ap: float = 0.0
 
-    NUM_POINT = 11
-    for recallLevel in np.arange(0, 1.1, 0.1):
+    NUM_POINT = 101
+    recallLevelList: list[float] = [
+        i * (1 / (NUM_POINT-1)) for i in range(NUM_POINT)]
+    elevenPointPrecisionList: list[float] = [0.0] * NUM_POINT
+    for i, recallLevel in enumerate(recallLevelList):
         if np.sum(recallList > recallLevel) == 0:
             precision = 0
         else:
-            precision = np.max(precisionList[recallList >= recallLevel])
+            precision = np.max(precisionList[recallList > recallLevel])
+        elevenPointPrecisionList[i] = precision
 
-        ap += precision
-
-    ap /= NUM_POINT
+    elevenPointPrecisionList: np.array = np.array(elevenPointPrecisionList)
 
     cwd: Path = Path(__file__).parent
     figureSaveDirPath: Path = cwd.parent / "prCurve"
-    drawPrecisionRecallCurve(targetClassId=targetClassId, precisionList=precisionList,
-                             recallList=recallList, figureSaveDirPath=figureSaveDirPath)
+    drawPrecisionRecallCurve(targetClassId=targetClassId, precisionList=elevenPointPrecisionList,
+                             recallList=recallLevelList, figureSaveDirPath=figureSaveDirPath)
+
+    ap = np.sum(elevenPointPrecisionList) / NUM_POINT
 
     return float(ap)
 

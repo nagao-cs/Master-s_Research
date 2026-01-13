@@ -1,6 +1,6 @@
 import torch
 import torchvision
-from torchvision.models.detection import fasterrcnn_mobilenet_v3_large_fpn, FasterRCNN_MobileNet_V3_Large_FPN_Weights
+from torchvision.models.detection import ssdlite320_mobilenet_v3_large, SSDLite320_MobileNet_V3_Large_Weights
 from torchvision.transforms import functional as F
 import cv2
 import numpy as np
@@ -9,7 +9,7 @@ from ..utils import utils
 from boundingBox.boundingBox import DetectionBoundingBox
 
 
-class FasterRCNNDetector(AbstractObjectDetector):
+class SSDDetector(AbstractObjectDetector):
     def __init__(self):
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu")
@@ -18,13 +18,13 @@ class FasterRCNNDetector(AbstractObjectDetector):
 
     def load_model(self):
         try:
-            weights = FasterRCNN_MobileNet_V3_Large_FPN_Weights.DEFAULT
-            self.model = fasterrcnn_mobilenet_v3_large_fpn(weights=weights)
+            weights = SSDLite320_MobileNet_V3_Large_Weights.DEFAULT
+            self.model = ssdlite320_mobilenet_v3_large(weights=weights)
             self.model.to(self.device)
             self.model.eval()
-            print(f"PyTorch FasterRCNN model loaded on {self.device}")
+            print(f"PyTorch SSD model loaded on {self.device}")
         except Exception as e:
-            raise RuntimeError(f"Error loading FasterRCNN model: {e}")
+            raise RuntimeError(f"Error loading SSD model: {e}")
 
     def predict(self, imagePath):
         image = cv2.imread(imagePath)
@@ -72,10 +72,11 @@ class FasterRCNNDetector(AbstractObjectDetector):
         fileterdClassIdList = classIdList[validIndices]
 
         # 正規化座標への変換
-        xMin = filteredBoundingBoxList[:, 0]
-        yMin = filteredBoundingBoxList[:, 1]
-        xMax = filteredBoundingBoxList[:, 2]
-        yMax = filteredBoundingBoxList[:, 3]
+        xMin, yMin, xMax, yMax = \
+            filteredBoundingBoxList[:, 0], \
+            filteredBoundingBoxList[:, 1], \
+            filteredBoundingBoxList[:, 2], \
+            filteredBoundingBoxList[:, 3],
 
         normarizedWidths = (xMax - xMin) / imageWidth
         normarizedHeights = (yMax - yMin) / imageHeight

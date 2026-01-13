@@ -1,6 +1,6 @@
 import torch
 import torchvision
-from torchvision.models.detection import fasterrcnn_mobilenet_v3_large_fpn, FasterRCNN_MobileNet_V3_Large_FPN_Weights
+from torchvision.models.detection import fcos_resnet50_fpn, FCOS_ResNet50_FPN_Weights
 from torchvision.transforms import functional as F
 import cv2
 import numpy as np
@@ -9,7 +9,7 @@ from ..utils import utils
 from boundingBox.boundingBox import DetectionBoundingBox
 
 
-class FasterRCNNDetector(AbstractObjectDetector):
+class FcosDetector(AbstractObjectDetector):
     def __init__(self):
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu")
@@ -18,13 +18,13 @@ class FasterRCNNDetector(AbstractObjectDetector):
 
     def load_model(self):
         try:
-            weights = FasterRCNN_MobileNet_V3_Large_FPN_Weights.DEFAULT
-            self.model = fasterrcnn_mobilenet_v3_large_fpn(weights=weights)
+            weights = FCOS_ResNet50_FPN_Weights.DEFAULT
+            self.model = fcos_resnet50_fpn(weights=weights)
             self.model.to(self.device)
             self.model.eval()
-            print(f"PyTorch FasterRCNN model loaded on {self.device}")
+            print(f"PyTorch FCOS model loaded on {self.device}")
         except Exception as e:
-            raise RuntimeError(f"Error loading FasterRCNN model: {e}")
+            raise RuntimeError(f"Error loading FCOS model: {e}")
 
     def predict(self, imagePath):
         image = cv2.imread(imagePath)

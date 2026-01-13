@@ -25,10 +25,8 @@ def convertGroundTruthFileToBoundingBoxList(groundTruthFilePath: str) -> list[Gr
             if size < utils.SIZE_THRESHOLD:
                 continue
 
-            label = classId
-
             groundTruthBoundingBox: GroundTruthBoundingBox = GroundTruthBoundingBox(
-                xCenter, yCenter, width, height, classId, label)
+                xCenter, yCenter, width, height, classId)
 
             groundTruthBoundingBoxList.append(groundTruthBoundingBox)
 
@@ -58,11 +56,10 @@ def convertDetectionFileToBoundingBoxList(detectionFilePath: str) -> list[Detect
             if size < utils.SIZE_THRESHOLD:
                 continue
 
-            label = classId
             confidenceScore = float(boundingBoxComponentList[5])
 
             detecionBoundingBox: DetectionBoundingBox = DetectionBoundingBox(
-                xCenter, yCenter, width, height, classId, label, confidenceScore)
+                xCenter, yCenter, width, height, classId, confidenceScore)
 
             detectionBoundingBoxList.append(detecionBoundingBox)
 

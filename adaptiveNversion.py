@@ -21,8 +21,6 @@ if __name__ == "__main__":
         "--models",
         type=str,
         required=True,
-        choices=["yolov8n", "yolov5n", "yolov11n",
-                 "rtdetr", "ssd", "yolov8l", "fastrcnn"],
         nargs='+',
     )
     argparser.add_argument(
@@ -59,11 +57,14 @@ if __name__ == "__main__":
             from ObjectDetection.models.yolov8l import Yolov8lDetector
             model = Yolov8lDetector()
         elif modelName == "ssd":
-            from ObjectDetection.models.SSD import SSDDetector
+            from ObjectDetection.models.SSD_torch import SSDDetector
             model = SSDDetector()
         elif modelName == "fastrcnn":
-            from ObjectDetection.models.FastRCNN import FastRCNNDetector
-            model = FastRCNNDetector()
+            from ObjectDetection.models.FastRCNN import FasterRCNNDetector
+            model = FasterRCNNDetector()
+        elif modelName == "fcos":
+            from ObjectDetection.models.FCOS import FcosDetector
+            model = FcosDetector()
         else:
             raise ValueError(
                 f"モデル '{modelName}' はサポートされていません。\n"
@@ -91,7 +92,7 @@ if __name__ == "__main__":
 
     CONF_THRESHOLD = 0.5
     IOU_THRESHOLD = 0.5
-    AGREEMENT_THRESHOLD = 0.5
+    AGREEMENT_THRESHOLD = 0.8
 
     numVersion: int = len(modelList)
 

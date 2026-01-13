@@ -42,7 +42,7 @@ if __name__ == '__main__':
 
     # detectionDatasetDir = cwd / "ObjectDetection" / "output" / \
         # f"{mapName}" / "labels" / f"{targetModelCombination}" / "front"
-    detectionDatasetDir = cwd / "adaptiveDetectionResult" / \
+    detectionDatasetDir = cwd / "oneVersionDetectionResult" / \
         "labels" / f"{mapName}" / f"{targetModelCombination}"
     if not os.path.exists(detectionDatasetDir):
         raise FileNotFoundError(f"{detectionDatasetDir} does not exist")
@@ -75,7 +75,9 @@ if __name__ == '__main__':
         classifiedBoundingBoxList.extend(classifiedBoundingBoxListPerFrame)
 
     # f1Scoreを計算する
-    f1: float = f1Score.computeF1Score(classifiedBoundingBoxList)
+    f1, precision, recall = f1Score.computeF1Score(classifiedBoundingBoxList)
 
+    print(f"precision = {precision}")
+    print(f"recall = {recall}")
     print(
         f"f1Score = {f1}")

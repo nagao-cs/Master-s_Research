@@ -44,3 +44,4 @@ __pycache__/
 /cuda-repo-wsl-ubuntu*
 /.vscode
 /adaptiveDetectionResult
+/oneVersionDetectionResult

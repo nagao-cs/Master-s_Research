@@ -68,7 +68,7 @@ class Yolov8nDetector(AbstractObjectDetector):
         confidencescoreList = filteredConfidenceScore.cpu().numpy()
         classIdList = filteredClassId.cpu().numpy().astype(int)
 
-        # NumPy配列でベクトル化処理
+        # 各バウンディングボックスを処理
         outputBoundingBoxList: list[DetectionBoundingBox] = []
         for i in range(len(validIndices)):
             xCenter = xywh[i, 0]

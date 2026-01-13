@@ -23,42 +23,65 @@ class Yolov8nDetector(AbstractObjectDetector):
             raise RuntimeError(f"Error loading yolov8n model: {e}")
 
     def predict(self, imagePath):
-        image = cv2.imread(imagePath)
-        if image is None:
-            raise FileExistsError(f"Could not read image: {imagePath}")
+        detectionResult = self.model.predict(
+            source=imagePath,
+            device=self.device,
+            conf=utils.CONF_THRESHOLD,
+            classes=[0, 2, 9, 11],
+            verbose=False
+        )[0]  # 1枚の画像を処理しても、バッチやストリームで処理してもリストで結果が返ってくるらしい。→ 最初の1つを見るためのインデックスで[0]
 
-        imageWidth = image.shape[1]
-        imageHeight = image.shape[0]
+        rawBoundingBoxList = detectionResult.boxes
+        imageHeight, imageWidth = detectionResult.orig_shape
 
-        detections = self.model.predict(image, device=self.device)
-        rawBoundingBoxList = detections[0].boxes
+        if len(rawBoundingBoxList) == 0:
+            return []
 
-        outputBoundingBoxList = list()
-        for rawBoundingBox in rawBoundingBoxList:
-            if rawBoundingBox.conf < utils.CONF_THRESHOLD:
-                continue
+        # 全ボックスを取得
+        xywhTensor = rawBoundingBoxList.xywhn  # shape: [N, 4]
+        confidenceScoreTensor = rawBoundingBoxList.conf    # shape: [N,]
+        classIdTensor = rawBoundingBoxList.cls      # shape: [N,]
 
-            xmin, ymin, xmax, ymax = rawBoundingBox.xyxy[0].tolist()
-            size = (xmax - xmin) * (ymax - ymin)
-            if size < utils.SIZE_THRESHOLD:
-                continue
+        # サイズ計算
+        widthTensor = xywhTensor[:, 2]      # shape: [N]
+        heightTensor = xywhTensor[:, 3]     # shape: [N]
+        sizeTensor = widthTensor * imageWidth * \
+            heightTensor * imageHeight  # shape: [N]
 
-            xmin, xmax, ymin, ymax = xmin/imageWidth, xmax / \
-                imageWidth, ymin/imageHeight, ymax/imageHeight
-            xCenter = (xmin + xmax) / 2
-            yCenter = (ymin + ymax) / 2
-            width = xmax - xmin
-            height = ymax - ymin
-            classId = utils.COCO_ID_MAPPER.get(int(rawBoundingBox.cls[0]), -1)
-            if classId not in utils.VALID_CLASS_ID:
-                continue
-            label = utils.COCO_LABELS.get(classId, 'unknown')
-            confidencescore = rawBoundingBox.conf[0].item()
+        # サイズについてのマスク作成
+        sizeMask = sizeTensor >= utils.SIZE_THRESHOLD
 
-            boundingBoxInstance = (
-                xCenter, yCenter, width, height, classId, label, confidencescore)
-            # boundingBoxInstance = DetectionBoundingBox(
-            # xCenter, yCenter, width, height, classId, label, confidencescore)
+        # マスク適用
+        validIndices = torch.where(sizeMask)[0]
+
+        if len(validIndices) == 0:
+            return []
+
+        # フィルタ済みデータを取得
+        filteredXYWH = xywhTensor[validIndices]  # shape: [M, 4]
+        # shape: [M]
+        filteredConfidenceScore = confidenceScoreTensor[validIndices]
+        filteredClassId = classIdTensor[validIndices]       # shape: [M]
+
+        # CPU に転送
+        xywh = filteredXYWH.cpu().numpy()
+        confidencescoreList = filteredConfidenceScore.cpu().numpy()
+        classIdList = filteredClassId.cpu().numpy().astype(int)
+
+        # NumPy配列でベクトル化処理
+        outputBoundingBoxList: list[DetectionBoundingBox] = []
+        for i in range(len(validIndices)):
+            xCenter = xywh[i, 0]
+            yCenter = xywh[i, 1]
+            width = xywh[i, 2]
+            height = xywh[i, 3]
+            classId = classIdList[i]
+            confidencescore = confidencescoreList[i]
+
+            boundingBoxInstance = DetectionBoundingBox(
+                float(xCenter), float(yCenter), float(width),
+                float(height), int(classId), float(confidencescore)
+            )
             outputBoundingBoxList.append(boundingBoxInstance)
 
         return outputBoundingBoxList

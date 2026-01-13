@@ -1,15 +1,9 @@
-import sys
 from logging import getLogger
 from tqdm import tqdm
 import time
 from pathlib import Path
 import os
 import argparse
-
-from adaptiveNversion.NversionExecutor import NversionExecutor
-from adaptiveNversion.versionController.VersionController import VersionController, VersionState
-from adaptiveNversion.integrator import MajorityIntegrator
-from adaptiveNversion.statsRecorder import StatsRecorder
 
 from boundingBox.boundingBox import DetectionBoundingBox
 
@@ -21,8 +15,6 @@ if __name__ == "__main__":
         "--model",
         type=str,
         required=True,
-        choices=["yolov8n", "yolov5n", "yolov11n",
-                 "rtdetr", "ssd", "yolov8l", "fastrcnn"],
     )
     argparser.add_argument(
         "--map",
@@ -54,11 +46,14 @@ if __name__ == "__main__":
         from ObjectDetection.models.yolov8l import Yolov8lDetector
         model = Yolov8lDetector()
     elif modelName == "ssd":
-        from ObjectDetection.models.SSD import SSDDetector
+        from ObjectDetection.models.SSD_torch import SSDDetector
         model = SSDDetector()
     elif modelName == "fastrcnn":
-        from ObjectDetection.models.FastRCNN import FastRCNNDetector
-        model = FastRCNNDetector()
+        from ObjectDetection.models.FastRCNN import FasterRCNNDetector
+        model = FasterRCNNDetector()
+    elif modelName == "fcos":
+        from ObjectDetection.models.FCOS import FcosDetector
+        model = FcosDetector()
     else:
         raise ValueError(
             f"モデル '{modelName}' はサポートされていません。\n"

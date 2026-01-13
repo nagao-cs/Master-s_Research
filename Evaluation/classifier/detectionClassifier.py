@@ -37,7 +37,7 @@ class DetectionClassifier:
             detectionBoundingBox = detectionBoundingBoxList[detectionIndex]
 
             truePositiveBoundingBox = ClassifiedBoundingBox(xCenter=detectionBoundingBox.xCenter, yCenter=detectionBoundingBox.yCenter, width=detectionBoundingBox.width, height=detectionBoundingBox.height,
-                                                            classId=detectionBoundingBox.classId, label=detectionBoundingBox.label, confidenceScore=detectionBoundingBox.confidenceScore, classifyCategory=ClassifyCategory.TP)
+                                                            classId=detectionBoundingBox.classId, confidenceScore=detectionBoundingBox.confidenceScore, classifyCategory=ClassifyCategory.TP)
             classifiedBoundingBoxList.append(truePositiveBoundingBox)
 
         for groundTruthIndex, groundTruthBoundingBox in enumerate(groundTruthBoundingBoxList):
@@ -45,7 +45,7 @@ class DetectionClassifier:
                 continue
 
             falseNegativeBoundingBox = ClassifiedBoundingBox(groundTruthBoundingBox.xCenter, groundTruthBoundingBox.yCenter, groundTruthBoundingBox.width,
-                                                             groundTruthBoundingBox.height, groundTruthBoundingBox.classId, groundTruthBoundingBox.label, confidenceScore=None, classifyCategory=ClassifyCategory.FN)
+                                                             groundTruthBoundingBox.height, groundTruthBoundingBox.classId, confidenceScore=None, classifyCategory=ClassifyCategory.FN)
             classifiedBoundingBoxList.append(falseNegativeBoundingBox)
 
         for detectionIndex, detectionBoundingBox in enumerate(detectionBoundingBoxList):
@@ -53,7 +53,7 @@ class DetectionClassifier:
                 continue
 
             falsePositiveBoundingBox = ClassifiedBoundingBox(detectionBoundingBox.xCenter, detectionBoundingBox.yCenter, detectionBoundingBox.width,
-                                                             detectionBoundingBox.height, detectionBoundingBox.classId, detectionBoundingBox.label, detectionBoundingBox.confidenceScore, ClassifyCategory.FP)
+                                                             detectionBoundingBox.height, detectionBoundingBox.classId, detectionBoundingBox.confidenceScore, ClassifyCategory.FP)
             classifiedBoundingBoxList.append(falsePositiveBoundingBox)
 
         return classifiedBoundingBoxList

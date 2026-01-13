@@ -54,13 +54,12 @@ class DetectionBoundingBox(BoundingBox):
 
 
 class GroundTruthBoundingBox(BoundingBox):
-    def __init__(self, xCenter: float, yCenter: float, width: float, height: float, classId: int, label: str):
+    def __init__(self, xCenter: float, yCenter: float, width: float, height: float, classId: int):
         self.xCenter: float = xCenter
         self.yCenter: float = yCenter
         self.width: float = width
         self.height: float = height
         self.classId: int = classId
-        self.label: str = label
 
 
 class ClassifyCategory(Enum):

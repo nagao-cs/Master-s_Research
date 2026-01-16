@@ -46,3 +46,6 @@ __pycache__/
 /adaptiveDetectionResult
 /oneVersionDetectionResult
 /nuScenes-env
+/new-carla-env
+/groundTruthDataset
+/trainDataset

@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 import os
 import argparse
+import cv2
 
 from boundingBox.boundingBox import DetectionBoundingBox
 
@@ -98,13 +99,22 @@ if __name__ == "__main__":
 
     outputLabelDir: Path = cwd / "oneVersionDetectionResult" / "labels" / \
         f"{mapName}" / f"{modelName}"
+    outputImageDir: Path = cwd / "oneVersionDetectionResult" / "debugImages" / \
+        f"{mapName}" / f"{modelName}"
     os.makedirs(outputLabelDir, exist_ok=True)
+    os.makedirs(outputImageDir, exist_ok=True)
 
     index: int = 0
-    for outputLabelList in outputDetectionList:
-        outputLabelPath = outputLabelDir / f"{index:06}.txt"
+    for inputImagePath, outputLabelList in tqdm(zip(inputImagePathList, outputDetectionList)):
+        outputImagePath: Path = outputImageDir / f"{index:06}.png"
+        outputLabelPath: Path = outputLabelDir / f"{index:06}.txt"
+
+        outputImage = cv2.imread(inputImagePath)
+
         with open(outputLabelPath, 'w') as outputFile:
             for boundingBox in outputLabelList:
+                outputImage = boundingBox.drawBoundingBoxOnImage(outputImage)
+
                 xCenter = boundingBox.xCenter
                 yCenter = boundingBox.yCenter
                 width = boundingBox.width
@@ -113,4 +123,5 @@ if __name__ == "__main__":
                 confidenceScore = boundingBox.confidenceScore
                 outputFile.write(
                     f"{classId} {xCenter} {yCenter} {width} {height} {confidenceScore}\n")
+        cv2.imwrite(outputImagePath, outputImage)
         index += 1

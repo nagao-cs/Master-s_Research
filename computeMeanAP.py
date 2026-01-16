@@ -40,10 +40,12 @@ if __name__ == '__main__':
     if not os.path.exists(groundTruthDatasetDir):
         raise FileNotFoundError(f"{groundTruthDatasetDir} does not exist")
 
-    # detectionDatasetDir = cwd / "ObjectDetection" / "output" / \
-        # f"{mapName}" / "labels" / f"{targetModelCombination}" / "front"
-    detectionDatasetDir = cwd / "adaptiveDetectionResult" / \
-        "labels" / f"{mapName}" / f"{targetModelCombination}"
+    if len(modelNameList) > 1:
+        detectionDatasetDir = cwd / "ObjectDetection" / "output" / \
+            f"{mapName}" / "labels" / f"{targetModelCombination}" / "front"
+    else:
+        detectionDatasetDir = cwd / "oneVersionDetectionResult" / \
+            "labels" / f"{mapName}" / f"{targetModelCombination}"
     if not os.path.exists(detectionDatasetDir):
         raise FileNotFoundError(f"{detectionDatasetDir} does not exist")
 

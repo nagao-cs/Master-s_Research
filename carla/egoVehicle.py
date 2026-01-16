@@ -95,9 +95,6 @@ class EgoVehicle:
             # 正しいフレームのデータが取れるまでループ
             while True:
                 if q.empty():
-                    # データがまだ来ていない場合は少し待つ必要があるかも知れませんが、
-                    # 同期モード(Sync)ならtick完了時点で入っているはずです。
-                    # 万が一空ならブロッキングgetで待ちます。
                     data = q.get(timeout=2.0)
                 else:
                     data = q.get()  # キューから取り出す

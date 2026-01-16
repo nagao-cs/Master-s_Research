@@ -5,11 +5,13 @@ from .AbstractObjectDetector import AbstractObjectDetector
 import tensorflow as tf
 from ..utils import utils
 from boundingBox.boundingBox import DetectionBoundingBox
+import torch
 
 
 class SSDDetector(AbstractObjectDetector):
     def __init__(self):
         self.model = None
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.load_model()
 
     def load_model(self):
@@ -22,37 +24,36 @@ class SSDDetector(AbstractObjectDetector):
 
     def predict(self, imagePath):
         image = cv2.imread(imagePath)
-        if image is None:
-            raise FileExistsError(f"Could not read image: {imagePath}")
-        imageWidth: int = image.shape[1]
+        # print(f"original image: type={type(image)}, shape={image.shape}")
         imageHeight: int = image.shape[0]
+        imageWidth: int = image.shape[1]
 
-        RGBImage = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        ResizedImage = cv2.resize(RGBImage, (320, 320))
-        image = np.array(ResizedImage, dtype=np.uint8)
-        image_tensor = tf.convert_to_tensor(image)
-        image_tensor = tf.expand_dims(image_tensor, axis=0)
+        imageTensor = tf.convert_to_tensor(image)
+        imageTensor = tf.expand_dims(imageTensor, axis=0)
+        # print(
+        # f"image Tensor: type={type(imageTensor)}, shape={imageTensor.shape}")
 
-        detections = self.model(image_tensor)
+        detections = self.model(imageTensor)
         # - detection_boxes: バウンディングボックスの座標 (ymin, xmin, ymax, xmax)
         # - detection_classes: 検出されたオブジェクトのクラスID
         # - detection_scores: 検出の信頼度スコア
         # - num_detections: 検出されたオブジェクトの数
-        num_detections = int(detections['num_detections'][0])
-        bboxes = detections['detection_boxes'][0].numpy()[:num_detections]
-        classes = detections['detection_classes'][0].numpy().astype(int)[
-            :num_detections]
-        scores = detections['detection_scores'][0].numpy()[:num_detections]
+        classIdList = detections["detection_classes"].numpy().astype(int)
+        # 有効なクラスIDのマスクを作成
+        classIdMask = classIdList in (0, 2, 9, 11)
+        validIndices = torch.where(classIdMask)[0]
+
+        yxyxList = detections["detection_boxes"][0].numpy()[validIndices]
+        confidenceScoreList = detections["detection_scores"][0].numpy()[
+            validIndices]
+        classIdList = classIdList[validIndices]
 
         outputBoundingBoxList = list()
-        for i in range(num_detections):
-            confidenceScore = scores[i]
-            # if confidenceScore < utils.CONF_THRESHOLD:
-            # continue
-            if confidenceScore < 0.5:
+        for coodinate, confidenceScore, classId in zip(yxyxList, confidenceScoreList, classIdList):
+            if confidenceScore < utils.CONF_THRESHOLD:
                 continue
 
-            ymin, xmin, ymax, xmax = bboxes[i]
+            ymin, xmin, ymax, xmax = coodinate
             xCenter = (xmin + xmax) / 2
             yCenter = (ymin + ymax) / 2
             width = xmax - xmin
@@ -62,10 +63,9 @@ class SSDDetector(AbstractObjectDetector):
             if size < utils.SIZE_THRESHOLD:
                 continue
 
-            classId = classes[i] - 1
-            label = utils.COCO_LABELS.get(classId, 'unknown')
+            classId = utils.COCO_ID_MAPPER.get(classId-1, -1)
 
             boundingBoxInstance = DetectionBoundingBox(
-                xCenter, yCenter, width, height, classId, label, confidenceScore)
+                xCenter, yCenter, width, height, classId, confidenceScore)
             outputBoundingBoxList.append(boundingBoxInstance)
         return outputBoundingBoxList

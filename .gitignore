@@ -49,3 +49,5 @@ __pycache__/
 /new-carla-env
 /groundTruthDataset
 /trainDataset
+*.csv
+*.jpg

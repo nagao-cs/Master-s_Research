@@ -1,5 +1,4 @@
 from ultralytics import YOLO
-import cv2
 from .AbstractObjectDetector import AbstractObjectDetector
 from ..utils import utils
 from boundingBox.boundingBox import DetectionBoundingBox
@@ -16,7 +15,9 @@ class Yolov8nDetector(AbstractObjectDetector):
 
     def load_model(self):
         try:
-            self.model = YOLO("yolov8n.pt")
+            # self.model = YOLO("yolov8n.pt")
+            self.model = YOLO(
+                "ObjectDetection/trainingModel/trainingyolov8n/weights/best.pt")
             print(f"YOLOv8n model loaded")
 
         except Exception as e:

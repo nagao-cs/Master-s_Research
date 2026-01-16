@@ -1,9 +1,17 @@
 from abc import ABC
 from enum import Enum
 from typing import Optional
+import cv2
 
 
 class BoundingBox(ABC):
+    def __init__(self, xCenter: float, yCenter: float, width: float, height: float, classId: int):
+        self.xCenter: float = xCenter
+        self.yCenter: float = yCenter
+        self.width: float = width
+        self.height: float = height
+        self.classId: int = classId
+
     def computeArea(self) -> float:
         """
         @param self: 面積を計算するbbox
@@ -42,24 +50,39 @@ class BoundingBox(ABC):
 
         return iou
 
+    def drawBoundingBoxOnImage(self, image):
+        imageWidth = image.shape[1]
+        imageHeight = image.shape[0]
+        absoluteXCenter: float = self.xCenter * imageWidth
+        absoluteYCenter: float = self.yCenter * imageHeight
+        absoluteWidth: float = self.width * imageWidth
+        absoluteHeight: float = self.height * imageHeight
+
+        absoluteXMin: int = int(absoluteXCenter - absoluteWidth / 2)
+        absoluteXMax: int = int(absoluteXCenter + absoluteWidth / 2)
+        absoluteYMin: int = int(absoluteYCenter - absoluteHeight / 2)
+        absoluteYMax: int = int(absoluteYCenter + absoluteHeight / 2)
+
+        confidenceScore: float = self.confidenceScore
+        classId: int = self.classId
+
+        cv2.rectangle(image, (absoluteXMin, absoluteYMin),
+                      (absoluteXMax, absoluteYMax), (0, 255, 0), 2)
+        text = f"{classId} {confidenceScore:.2f}"
+        cv2.putText(image, text, (absoluteXMin, absoluteYMin - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        return image
+
 
 class DetectionBoundingBox(BoundingBox):
     def __init__(self, xCenter: float, yCenter: float, width: float, height: float, classId: int, confidenceScore: float):
-        self.xCenter = xCenter
-        self.yCenter = yCenter
-        self.width = width
-        self.height = height
-        self.classId = classId
+        super().__init__(xCenter, yCenter, width, height, classId)
         self.confidenceScore = confidenceScore
 
 
 class GroundTruthBoundingBox(BoundingBox):
     def __init__(self, xCenter: float, yCenter: float, width: float, height: float, classId: int):
-        self.xCenter: float = xCenter
-        self.yCenter: float = yCenter
-        self.width: float = width
-        self.height: float = height
-        self.classId: int = classId
+        super().__init__(xCenter, yCenter, width, height, classId)
 
 
 class ClassifyCategory(Enum):
@@ -70,11 +93,7 @@ class ClassifyCategory(Enum):
 
 class ClassifiedBoundingBox(BoundingBox):
     def __init__(self, xCenter: float, yCenter: float, width: float, height: float, classId: int, confidenceScore: Optional[float], classifyCategory: ClassifyCategory):
-        self.xCenter = xCenter
-        self.yCenter = yCenter
-        self.width = width
-        self.height = height
-        self.classId = classId
+        super().__init__(xCenter, yCenter, width, height, classId)
         if confidenceScore == None:
             self.confidenceScore = 0.0
         else:

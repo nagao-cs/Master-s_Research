@@ -42,25 +42,34 @@ class VersionController:
         for boundingBox in boundingBoxList:
             confidenceScore = boundingBox.confidenceScore
             minConfidenceScore = min(minConfidenceScore, confidenceScore)
-        return minConfidenceScore < self.confidenceScoreThreshold
+
+        if minConfidenceScore < self.confidenceScoreThreshold:
+            return True
+        elif minConfidenceScore >= self.confidenceScoreThreshold:
+            return False
 
     def _shouldSwitchToOneVersion(self, groupedBoundingBoxList: list[list[DetectionBoundingBox]]) -> bool:
-        agreementScore = self._calcAgreementScore(groupedBoundingBoxList)
-        return agreementScore > self.agreementScoreThreshold
+        agreementScore: float = self._calcAgreementScore(
+            groupedBoundingBoxList)
+
+        if agreementScore > self.agreementScoreThreshold:
+            return True
+        elif agreementScore <= self.agreementScoreThreshold:
+            return False
 
     def _calcAgreementScore(self, groupedBoundingBoxList: list[list[DetectionBoundingBox]]) -> float:
-        agreementScore = 0.0
+        agreementScore: float = 0.0
+        numGroups: int = len(groupedBoundingBoxList)
 
-        if groupedBoundingBoxList == None:
+        # groupの数が0ならすべての検出結果が一致しているので一致度は1.0になる
+        if numGroups == 0:
             agreementScore = 1.0
             return agreementScore
 
-        numAllMatchedGroup = 0
-        numGroups = 0
+        numAllDetectionResultsMatchedGroup: int = 0
         for groupedBoundingBox in groupedBoundingBoxList:
-            numGroups += 1
             if len(groupedBoundingBox) == self.maxVersion:
-                numAllMatchedGroup += 1
+                numAllDetectionResultsMatchedGroup += 1
 
-        agreementScore = numAllMatchedGroup / numGroups
+        agreementScore = numAllDetectionResultsMatchedGroup / numGroups
         return agreementScore

@@ -82,7 +82,7 @@ def computeUnionFalseNegative(gtBBoxList: list[GroundTruthBoundingBox], BBoxGrou
         key=lambda iouPair: iouPair[IOU_VALUE_INDEX], reverse=True)
 
     # ----------
-    # マッチングの処理
+    # マッチングの処理（iouの高い順にgtとdetを対応させていく）
     # ----------
     matchedGtIdx: set[int] = set()
     matchedDetIdx: set[int] = set()
@@ -95,7 +95,14 @@ def computeUnionFalseNegative(gtBBoxList: list[GroundTruthBoundingBox], BBoxGrou
         matchedDetIdx.add(detIdx)
         matchedDict[gtIdx] = detIdx
 
-    for gtIdx in matchedGtIdx:
+    for gtIdx in range(len(gtBBoxList)):
+        # ----------
+        # どのモデルも検出できなかった
+        # ----------
+        if gtIdx not in matchedGtIdx:
+            unionFalseNegativeList.append(gtBBoxList[gtIdx])
+            continue
+
         correspondDetIdx: int = matchedDict[gtIdx]
         # ----------
         # 対応する検出がすべてのモデルによってされている

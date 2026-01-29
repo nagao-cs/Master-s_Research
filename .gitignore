@@ -1,3 +1,6 @@
+# ----------
+# carla関連
+# ----------
 /AdditionalMaps_0.9.13
 /AdditionalMaps
 /carla-env
@@ -9,45 +12,71 @@
 /PythonAPI/carla
 /PythonAPI/examples
 /PythonAPI/util
+/CarlaUE4.exe
+/LICENSE
+/scenario_runner-*
+
+# -----------
+# 共通のもの
+# -----------
 __pycache__/
 *.pyc
-/CarlaUE4.exe
-/Dockerfile
-/LICENSE
-/ObjectDetection/yolov8_env
-/ObjectDetection/yolov8_results
-/ObjectDetection/yolov8n.pt
-/ObjectDetection/requirement.txt
-/ObjectDetection/output
-/ObjectDetection/detectionResult
-/output
-/scenario_runner-*
 /CHANGELOG
-/README
-/信頼性学会
-/進捗報告
-/Evaluation/*.pkl
+/Dockerfile
+*.png
+*pt
+/cuda-repo-wsl-ubuntu*
+/.vscode
+*.csv
+*.jpg
+
+# -----------
+# venv関連
+# -----------
+/src/ObjectDetection/yolov8_env
 /detection-env
+/evaluationEnv
+/nuScenes-env
+/new-carla-env
+
+# -----------
+# データセット系
+# -----------
+/src/ObjectDetection/yolov8_results
+/src/ObjectDetection/output
+/src/ObjectDetection/detectionResult
+/output
 /raw_dataset/dataset
 /raw_dataset/images
 /raw_dataset/labels
 /raw_dataset/runs
-/国際学会
-/COCO_exp
-/ObjectDetection/integrated_output
-*.png
-*pt
-/ObjectDetection/adaptive_Nversion_detector/output
-/ReliabilityOfNversionObjectDetection
-/test
-/evaluationEnv
-/cuda-repo-wsl-ubuntu*
-/.vscode
-/adaptiveDetectionResult
-/oneVersionDetectionResult
-/nuScenes-env
-/new-carla-env
+/src/ObjectDetection/integrated_output
+/src/ObjectDetection/adaptive_Nversion_detector/output
 /groundTruthDataset
 /trainDataset
-*.csv
-*.jpg
+/adaptiveDetectionResult
+/oneVersionDetectionResult
+/src/*.txt
+/src/*.png
+
+# -----------
+# 学会関連
+# -----------
+/信頼性学会
+/国際学会
+/ReliabilityOfNversionObjectDetection
+
+# -----------
+# その他
+# -----------
+/src/ObjectDetection/yolov8n.pt
+/src/ObjectDetection/requirement.txt
+/README
+/進捗報告
+/Evaluation/*.pkl
+/COCO_exp
+/test
+
+
+
+

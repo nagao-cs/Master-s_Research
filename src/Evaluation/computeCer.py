@@ -61,4 +61,5 @@ if __name__ == '__main__':
     cer: float = computeCer(groundTruthDatasetDir,
                             detectionDatasetDirList, iouThreshold)
 
-    print(f"cer: {cer}")
+    print(f"cer: {cer:.3f}")
+    print(f"fpCer: {fpCer:.3f}, fnCer: {fnCer:.3f}")

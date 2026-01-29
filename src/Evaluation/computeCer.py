@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 import os
 
-from .metrics.CovCer import computeCov, computeFpCov, computeFnCov
+from .metrics.CovCer import computeCer, computeFpCer, computeFnCer
 
 if __name__ == '__main__':
     # ----------
@@ -54,12 +54,11 @@ if __name__ == '__main__':
     # -----------
     # cov計算
     # -----------
-    fpCov: float = computeFpCov(
+    fpCer: float = computeFpCer(
         groundTruthDatasetDir, detectionDatasetDirList, iouThreshold)
-    fnCov: float = computeFnCov(
+    fnCer: float = computeFnCer(
         groundTruthDatasetDir, detectionDatasetDirList, iouThreshold)
-    cov = computeCov(groundTruthDatasetDir,
-                     detectionDatasetDirList, iouThreshold)
+    cer: float = computeCer(groundTruthDatasetDir,
+                            detectionDatasetDirList, iouThreshold)
 
-    print(f"cov: {cov:.3f}")
-    print(f"fpCov: {fpCov:.3f}, fnCov: {fnCov:.3f}")
+    print(f"cer: {cer}")

@@ -55,6 +55,9 @@ if __name__ == "__main__":
     elif modelName == "fcos":
         from src.ObjectDetection.models.FCOS import FcosDetector
         model = FcosDetector()
+    elif modelName == "retinanet":
+        from src.ObjectDetection.models.retinanet import RetinanetDetector
+        model = RetinanetDetector()
     else:
         raise ValueError(
             f"モデル '{modelName}' はサポートされていません。\n"
@@ -106,7 +109,7 @@ if __name__ == "__main__":
     os.makedirs(outputImageDir, exist_ok=True)
 
     index: int = 0
-    for inputImagePath, outputLabelList in tqdm(zip(inputImagePathList, outputDetectionList)):
+    for inputImagePath, outputLabelList in tqdm(zip(inputImagePathList, outputDetectionList), desc="[image save]", total=len(outputDetectionList)):
         outputImagePath: Path = outputImageDir / f"{index:06}.png"
         outputLabelPath: Path = outputLabelDir / f"{index:06}.txt"
 

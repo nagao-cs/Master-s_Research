@@ -369,7 +369,7 @@ def computeFpCer(gtDatasetDirPath: Path, detDatasetDirPathList: list[Path], iouT
     # ----------
     # データセットの展開（リスト）
     # ----------
-    for gtBBoxList, detFrameData in tqdm(frameDataGenerator(gtDatasetDirPath, detDatasetDirPathList), desc="[fpCov]", total=len(os.listdir(gtDatasetDirPath))):
+    for gtBBoxList, detFrameData in tqdm(frameDataGenerator(gtDatasetDirPath, detDatasetDirPathList), desc="[fpCer]", total=len(os.listdir(gtDatasetDirPath))):
         # ----------
         # 検出結果のグルーピング
         # ----------
@@ -410,7 +410,7 @@ def computeFnCer(gtDatasetDirPath: Path, detDatasetDirPathList: list[Path], iouT
     # ----------
     # データセットの展開（リスト）
     # ----------
-    for gtBBoxList, detFrameData in tqdm(frameDataGenerator(gtDatasetDirPath, detDatasetDirPathList), desc="[fnCov]", total=len(os.listdir(gtDatasetDirPath))):
+    for gtBBoxList, detFrameData in tqdm(frameDataGenerator(gtDatasetDirPath, detDatasetDirPathList), desc="[fnCer]", total=len(os.listdir(gtDatasetDirPath))):
         # ----------
         # 検出結果のグルーピング
         # ----------

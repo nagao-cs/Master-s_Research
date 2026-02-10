@@ -34,30 +34,61 @@ def frameDataGenerator(gtDatasetDirPath: Path, detDatasetDirPathList: list[Path]
 def computeUnionFalsePositive(gtBBoxList: list[GroundTruthBoundingBox], BBoxGroupList: list[list[DetectionBoundingBox]], iouThreshold: float) -> list[list[DetectionBoundingBox]]:
     unionFalsePositiveGroupList: list[list[DetectionBoundingBox]] = []
 
-    for BBoxGroup in BBoxGroupList:
-        averagedBBox: DetectionBoundingBox = averageBoundingBox(BBoxGroup)
+    # ----------
+    # 全グループの平均化
+    # ----------
+    averagedBBoxList: list[DetectionBoundingBox] = list(
+        map(averageBoundingBox, BBoxGroupList))
 
-        for gtBBox in gtBBoxList:
-            iou = averagedBBox.computeIoU(gtBBox)
-            if iou > iouThreshold:
-                break
-        else:
-            unionFalsePositiveGroupList.append(BBoxGroup)
+    # ----------
+    # (gtIdx, detIdx, Iou)のリスト作成
+    # ----------
+    IOU_VALUE_INDEX = 2
+    iouPairList: list[tuple[int, int, float]] = []
+    for gtIdx, gtBBox in enumerate(gtBBoxList):
+        for detIdx, detBBox in enumerate(averagedBBoxList):
+            iou = gtBBox.computeIoU(detBBox)
+            if iou < iouThreshold:
+                continue
+            iouPair: tuple[int, int, float] = (gtIdx, detIdx, iou)
+            iouPairList.append(iouPair)
+    iouPairList.sort(
+        key=lambda iouPair: iouPair[IOU_VALUE_INDEX], reverse=True)
+
+    # ----------
+    # マッチングの処理（iouの高い順にgtとdetを対応させていく）
+    # ----------
+    matchedGtIdx: set[int] = set()
+    matchedDetIdx: set[int] = set()
+    matchedDict: dict[int, int] = {}
+    for gtIdx, detIdx, iou in iouPairList:
+        if (gtIdx in matchedGtIdx) or (detIdx in matchedDetIdx):
+            continue
+
+        matchedGtIdx.add(gtIdx)
+        matchedDetIdx.add(detIdx)
+        matchedDict[gtIdx] = detIdx
+
+    # ----------
+    # すべてのFPの数を数える
+    # ----------
+    for detIdx in range(len(BBoxGroupList)):
+        # ----------
+        # マッチしていればTP
+        # ----------
+        if detIdx in matchedDetIdx:
+            continue
+
+        # ----------
+        # FPを追加
+        # ----------
+        targetBBoxGroup: list[DetectionBoundingBox] = BBoxGroupList[detIdx]
+        unionFalsePositiveGroupList.append(targetBBoxGroup)
 
     return unionFalsePositiveGroupList
 
 
 def computeUnionFalseNegative(gtBBoxList: list[GroundTruthBoundingBox], BBoxGroupList: list[list[DetectionBoundingBox]], numVersion: int, iouThreshold: float) -> list[GroundTruthBoundingBox]:
-    """
-    :param gtBBoxList: BBoxの正解データ
-    :type gtBBoxList: list[GroundTruthBoundingBox]
-    :param BBoxGroupList: グルーピングした検出結果のリスト
-    :type BBoxGroupList: list[list[DetectionBoundingBox]]
-    :param iouThreshold: iouの閾値
-    :type iouThreshold: float
-    :return: いずれかのモデルが検出できなかった物体のリスト
-    :rtype: list[GroundTruthBoundingBox]
-    """
     unionFalseNegativeList: list[GroundTruthBoundingBox] = []
 
     # ----------
@@ -105,12 +136,11 @@ def computeUnionFalseNegative(gtBBoxList: list[GroundTruthBoundingBox], BBoxGrou
 
         correspondDetIdx: int = matchedDict[gtIdx]
         # ----------
-        # 対応する検出がすべてのモデルによってされている
+        # いずれかのモデルが見逃している
         # ----------
-        if len(BBoxGroupList[correspondDetIdx]) == numVersion:
+        if len(BBoxGroupList[correspondDetIdx]) != numVersion:
+            unionFalseNegativeList.append(gtBBoxList[gtIdx])
             continue
-
-        unionFalseNegativeList.append(gtBBoxList[gtIdx])
 
     return unionFalseNegativeList
 
@@ -118,23 +148,56 @@ def computeUnionFalseNegative(gtBBoxList: list[GroundTruthBoundingBox], BBoxGrou
 def computeIntersectionFalsePositive(gtBBoxList: list[GroundTruthBoundingBox], BBoxGroupList: list[list[DetectionBoundingBox]], numVersion: int, iouThreshold: float) -> list[list[DetectionBoundingBox]]:
     unanimousFalsePositiveGroupList: list[list[DetectionBoundingBox]] = []
     # ----------
-    # 全会一致の検出を抽出
+    # 全グループの平均化
     # ----------
-    unanimousDetectionList: list[list[DetectionBoundingBox]] = list(
-        filter(lambda BBoxGroup: len(BBoxGroup) == numVersion, BBoxGroupList))
+    averagedBBoxList: list[DetectionBoundingBox] = list(
+        map(averageBoundingBox, BBoxGroupList))
 
-    for BBoxGroup in unanimousDetectionList:
-        averagedBBox: DetectionBoundingBox = averageBoundingBox(BBoxGroup)
+    # ----------
+    # (gtIdx, detIdx, Iou)のリスト作成
+    # ----------
+    IOU_VALUE_INDEX = 2
+    iouPairList: list[tuple[int, int, float]] = []
+    for gtIdx, gtBBox in enumerate(gtBBoxList):
+        for detIdx, detBBox in enumerate(averagedBBoxList):
+            iou = gtBBox.computeIoU(detBBox)
+            if iou < iouThreshold:
+                continue
+            iouPair: tuple[int, int, float] = (gtIdx, detIdx, iou)
+            iouPairList.append(iouPair)
+    iouPairList.sort(
+        key=lambda iouPair: iouPair[IOU_VALUE_INDEX], reverse=True)
 
-        for gtBBox in gtBBoxList:
-            iou = averagedBBox.computeIoU(gtBBox)
-            if iou > iouThreshold:
-                break
-        else:
-            # ----------
-            # どのgtともマッチしなかったらFP
-            # ----------
-            unanimousFalsePositiveGroupList.append(BBoxGroup)
+    # ----------
+    # マッチングの処理（iouの高い順にgtとdetを対応させていく）
+    # ----------
+    matchedGtIdx: set[int] = set()
+    matchedDetIdx: set[int] = set()
+    matchedDict: dict[int, int] = {}
+    for gtIdx, detIdx, iou in iouPairList:
+        if (gtIdx in matchedGtIdx) or (detIdx in matchedDetIdx):
+            continue
+
+        matchedGtIdx.add(gtIdx)
+        matchedDetIdx.add(detIdx)
+        matchedDict[gtIdx] = detIdx
+
+    # ----------
+    # すべてに共通するFPの数を数える
+    # ----------
+    for detIdx in range(len(BBoxGroupList)):
+        # ----------
+        # マッチしてたらTP
+        # ----------
+        if detIdx in matchedDetIdx:
+            continue
+
+        # ----------
+        # fpの中からすべてに共通するものを抽出する
+        # ----------
+        targetBBoxGroup: list[DetectionBoundingBox] = BBoxGroupList[detIdx]
+        if len(targetBBoxGroup) == numVersion:
+            unanimousFalsePositiveGroupList.append(targetBBoxGroup)
 
     return unanimousFalsePositiveGroupList
 
@@ -164,22 +227,31 @@ def computeIntersectionFalseNegative(gtBBoxList: list[GroundTruthBoundingBox], B
         key=lambda iouPair: iouPair[IOU_VALUE_INDEX], reverse=True)
 
     # ----------
-    # マッチングの処理
+    # マッチングの処理（iouの高い順にgtとdetを対応させていく）
     # ----------
     matchedGtIdx: set[int] = set()
     matchedDetIdx: set[int] = set()
+    matchedDict: dict[int, int] = {}
     for gtIdx, detIdx, iou in iouPairList:
         if (gtIdx in matchedGtIdx) or (detIdx in matchedDetIdx):
             continue
 
         matchedGtIdx.add(gtIdx)
         matchedDetIdx.add(detIdx)
+        matchedDict[gtIdx] = detIdx
 
-    unanimousFalseNegativeList = [
-        gtBBoxList[idx]
-        for idx in range(len(gtBBoxList))
-        if idx not in matchedGtIdx
-    ]
+    # ----------
+    # どのモデルも検出できなかった物体を抽出
+    # ----------
+    for gtIdx in range(len(gtBBoxList)):
+        # -----------
+        # マッチしてたらtp
+        # -----------
+        if gtIdx in matchedGtIdx:
+            continue
+
+        targetGtBBox: GroundTruthBoundingBox = gtBBoxList[gtIdx]
+        unanimousFalseNegativeList.append(targetGtBBox)
 
     return unanimousFalseNegativeList
 
@@ -263,12 +335,11 @@ def computeCer(gtDatasetDirPath: Path, detDatasetDirPathList: list[Path], iouThr
         # ----------
         # 総インスタンス数の計算
         # ----------
-        unionFalsePositiveList: list[list[DetectionBoundingBox]] = computeUnionFalsePositive(
-            gtBBoxList, BBoxGroupList, iouThreshold)
         totalBBoxInstance: int = len(gtBBoxList) + len(unionFalsePositiveList)
 
         cer += (len(unionFalsePositiveList) +
                 len(unionFalseNegativeList)) / totalBBoxInstance
+
         numImage += 1
 
     cer = 1 - (cer / numImage)

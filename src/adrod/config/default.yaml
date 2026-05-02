@@ -1,0 +1,17 @@
+thresholds:
+  # 1 -> 2 version
+  theta_u: 0.25
+  tau_p: 0.5
+  
+  # 2 -> 1 or 3 version
+  theta_high: 0.8
+  theta_low: 0.5
+
+map: "Town02"
+iou_threshold: 0.5
+integrate_way: "affirmative"
+
+model_1: "yolov8n"
+model_2: "ssd"
+model_3: "rtdetr"
+max_version: 3

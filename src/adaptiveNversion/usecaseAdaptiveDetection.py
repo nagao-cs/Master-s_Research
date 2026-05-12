@@ -8,8 +8,8 @@ import argparse
 
 from .usecaseDetExecutor import UseCaseNversionExecutor
 from .versionController.usecaseVersionController import UseCaseVersionController, UseCaseVersionState
-from .integrator.affirmativeIntegrator import ConfidenceBaseIntegrator
-from .integrator.majorityIntegrator import MajorityIntegrator
+from ..boundingBox.integrator.affirmativeIntegrator import ConfidenceBaseIntegrator
+from ..boundingBox.integrator.majorityIntegrator import MajorityIntegrator
 from .stats.statsRecorder import StatsRecorder
 
 from src.boundingBox.boundingBox import DetectionBoundingBox
@@ -55,6 +55,8 @@ if __name__ == "__main__":
     mapName: str = args.map
     modelNameList: list[str] = args.models
 
+    # covComb = modelNameList
+    # cerComb = modelNameList
     covComb: list[str] = args.cov
     covDetectors: list[object] = []
     cerComb: list[str] = args.cer
@@ -88,6 +90,9 @@ if __name__ == "__main__":
         elif modelName == "fcos":
             from src.ObjectDetection.models.FCOS import FcosDetector
             model = FcosDetector()
+        elif modelName == "retinanet":
+            from src.ObjectDetection.models.retinanet import RetinanetDetector
+            model = RetinanetDetector()
         else:
             raise ValueError(
                 f"モデル '{modelName}' はサポートされていません。\n"
@@ -119,6 +124,9 @@ if __name__ == "__main__":
         elif modelName == "fcos":
             from src.ObjectDetection.models.FCOS import FcosDetector
             model = FcosDetector()
+        elif modelName == "retinanet":
+            from src.ObjectDetection.models.retinanet import RetinanetDetector
+            model = RetinanetDetector()
         else:
             raise ValueError(
                 f"モデル '{modelName}' はサポートされていません。\n"
@@ -136,20 +144,23 @@ if __name__ == "__main__":
             from src.ObjectDetection.models.Yolov5n import Yolov5nDetector
             model = Yolov5nDetector()
         elif modelName == "rtdetr":
-            from ObjectDetection.models.rtDETR import RTDETRDetector
+            from src.ObjectDetection.models.rtDETR import RTDETRDetector
             model = RTDETRDetector()
         elif modelName == 'yolov8l':
-            from ObjectDetection.models.yolov8l import Yolov8lDetector
+            from src.ObjectDetection.models.yolov8l import Yolov8lDetector
             model = Yolov8lDetector()
         elif modelName == "ssd":
-            from ObjectDetection.models.SSD_torch import SSDDetector
+            from src.ObjectDetection.models.SSD_torch import SSDDetector
             model = SSDDetector()
         elif modelName == "fastrcnn":
-            from ObjectDetection.models.FastRCNN import FasterRCNNDetector
+            from src.ObjectDetection.models.FastRCNN import FasterRCNNDetector
             model = FasterRCNNDetector()
         elif modelName == "fcos":
-            from ObjectDetection.models.FCOS import FcosDetector
+            from src.ObjectDetection.models.FCOS import FcosDetector
             model = FcosDetector()
+        elif modelName == "retinanet":
+            from src.ObjectDetection.models.retinanet import RetinanetDetector
+            model = RetinanetDetector()
         else:
             raise ValueError(
                 f"モデル '{modelName}' はサポートされていません。\n"
@@ -203,7 +214,7 @@ if __name__ == "__main__":
     CONF_THRESHOLD = 0.5
     IOU_THRESHOLD = 0.5
     NUM_OBJ_THRESHOLD = 5
-    INTEGRATE_CONF_THRESHOLD = 0.8
+    INTEGRATE_CONF_THRESHOLD = 0.4
     print(
         f"cer遷移の信頼度:{CONF_THRESHOLD}, cer遷移の物体数:{NUM_OBJ_THRESHOLD}, 採用の信頼度:{INTEGRATE_CONF_THRESHOLD}")
 
@@ -244,14 +255,27 @@ if __name__ == "__main__":
                 integratedBoundingBoxList, groupedBoundingBoxList = detectionExecutor.exeCovDetection(
                     imagePath=inputImagePath)
                 finalDetections = integratedBoundingBoxList
+                # ----------
+                # 最終的な検出バージョンを記録
+                # ----------
+                executeState = versionController.state
             elif versionController.state == UseCaseVersionState.CER_STATE:
                 integratedBoundingBoxList, groupedBoundingBoxList = detectionExecutor.exeCerDetection(
                     imagePath=inputImagePath)
                 finalDetections = integratedBoundingBoxList
-            # ----------
-            # 最終的な検出バージョンを記録
-            # ----------
-            executeState = versionController.state
+                # ----------
+                # 最終的な検出バージョンを記録
+                # ----------
+                executeState = versionController.state
+                # ----------
+                # FPが次のフレームにもあるとは限らないため1バージョンにもどす
+                # ----------
+                versionController.state = UseCaseVersionState.ONE
+            else:
+                # ----------
+                # 最終的な検出バージョンを記録
+                # ----------
+                executeState = versionController.state
         # ----------
         # Covの場合
         # ----------
@@ -259,6 +283,10 @@ if __name__ == "__main__":
             executeState = versionController.state
             integratedBoundingBoxList, groupedBoundingBoxList = detectionExecutor.exeCovDetection(
                 inputImagePath)
+            # ----------
+            # 最終的な検出バージョンを記録
+            # ----------
+            executeState = versionController.state
             versionController.updateState(integratedBoundingBoxList)
             finalDetections = integratedBoundingBoxList
         # ----------
@@ -268,6 +296,10 @@ if __name__ == "__main__":
             executeState = versionController.state
             integratedBoundingBoxList, groupedBoundingBoxList = detectionExecutor.exeCerDetection(
                 inputImagePath)
+            # ----------
+            # 最終的な検出バージョンを記録
+            # ----------
+            executeState = versionController.state
             versionController.updateState(integratedBoundingBoxList)
             finalDetections = integratedBoundingBoxList
 

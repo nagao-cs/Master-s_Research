@@ -1,14 +1,14 @@
 import tensorflow_hub as hub
 import cv2
 import numpy as np
-from .AbstractObjectDetector import AbstractObjectDetector
+from .ObjectDetector import Detector
 import os
 import csv
 import tensorflow as tf
 from PIL import Image
 
 
-class MobilenetDetector(AbstractObjectDetector):
+class MobilenetDetector(Detector):
     def __init__(self):
         self.model = None
         self.load_model()

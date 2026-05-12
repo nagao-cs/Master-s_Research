@@ -1,14 +1,14 @@
 import tensorflow_hub as hub
 import cv2
 import numpy as np
-from .AbstractObjectDetector import AbstractObjectDetector
+from .ObjectDetector import Detector
 import tensorflow as tf
 from ..utils import utils
 from boundingBox.boundingBox import DetectionBoundingBox
 import torch
 
 
-class SSDDetector(AbstractObjectDetector):
+class SSDDetector(Detector):
     def __init__(self):
         self.model = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"

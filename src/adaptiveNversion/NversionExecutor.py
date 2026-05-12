@@ -1,10 +1,11 @@
-from .integrator.integrator import Integrator
+from ..boundingBox.integrator.integrator import Integrator
 from src.boundingBox.boundingBox import DetectionBoundingBox
+from src.ObjectDetection.models.ObjectDetector import Detector
 
 
 class NversionExecutor:
-    def __init__(self, detectors: list, detectionIntegrator: Integrator):
-        self.detectors: list = detectors
+    def __init__(self, detectors: list[Detector], detectionIntegrator: Integrator):
+        self.detectors: list[Detector] = detectors
         self.detectionIntegrator: Integrator = detectionIntegrator
         self.setBaseDetector(detectors[0])
 

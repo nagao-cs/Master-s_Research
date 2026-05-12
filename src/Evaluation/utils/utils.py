@@ -1,4 +1,5 @@
-SIZE_THRESHOLD = 0  # バウンディングボックスの最小サイズ
+SIZE_THRESHOLD = 25*25  # バウンディングボックスの最小サイズ
+# SIZE_THRESHOLD = 25
 CONF_THRESHOLD = 0  # 信頼度の閾値
 IM_WIDTH = 800
 IM_HEIGHT = 600

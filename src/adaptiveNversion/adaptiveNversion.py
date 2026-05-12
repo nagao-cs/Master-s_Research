@@ -8,7 +8,7 @@ import argparse
 
 from .NversionExecutor import NversionExecutor
 from .versionController.VersionController import VersionController, VersionState
-from .integrator.majorityIntegrator import MajorityIntegrator
+from ..boundingBox.integrator.majorityIntegrator import MajorityIntegrator
 from .stats.statsRecorder import StatsRecorder
 
 from src.boundingBox.boundingBox import DetectionBoundingBox
@@ -42,29 +42,32 @@ if __name__ == "__main__":
 
     for modelName in modelNameList:
         if modelName == "yolov8n":
-            from ObjectDetection.models.Yolov8n import Yolov8nDetector
+            from src.ObjectDetection.models.Yolov8n import Yolov8nDetector
             model = Yolov8nDetector()
         elif modelName == "yolov11n":
-            from ObjectDetection.models.Yolov11n import Yolov11nDetector
+            from src.ObjectDetection.models.Yolov11n import Yolov11nDetector
             model = Yolov11nDetector()
         elif modelName == "yolov5n":
-            from ObjectDetection.models.Yolov5n import Yolov5nDetector
+            from src.ObjectDetection.models.Yolov5n import Yolov5nDetector
             model = Yolov5nDetector()
         elif modelName == "rtdetr":
-            from ObjectDetection.models.rtDETR import RTDETRDetector
+            from src.ObjectDetection.models.rtDETR import RTDETRDetector
             model = RTDETRDetector()
         elif modelName == 'yolov8l':
-            from ObjectDetection.models.yolov8l import Yolov8lDetector
+            from src.ObjectDetection.models.yolov8l import Yolov8lDetector
             model = Yolov8lDetector()
         elif modelName == "ssd":
-            from ObjectDetection.models.SSD_torch import SSDDetector
+            from src.ObjectDetection.models.SSD_torch import SSDDetector
             model = SSDDetector()
         elif modelName == "fastrcnn":
-            from ObjectDetection.models.FastRCNN import FasterRCNNDetector
+            from src.ObjectDetection.models.FastRCNN import FasterRCNNDetector
             model = FasterRCNNDetector()
         elif modelName == "fcos":
-            from ObjectDetection.models.FCOS import FcosDetector
+            from src.ObjectDetection.models.FCOS import FcosDetector
             model = FcosDetector()
+        elif modelName == "retinanet":
+            from src.ObjectDetection.models.retinanet import RetinanetDetector
+            model = RetinanetDetector()
         else:
             raise ValueError(
                 f"モデル '{modelName}' はサポートされていません。\n"
@@ -93,7 +96,7 @@ if __name__ == "__main__":
 
     CONF_THRESHOLD = 0.5
     IOU_THRESHOLD = 0.5
-    AGREEMENT_THRESHOLD = 0.8
+    AGREEMENT_THRESHOLD = 0.5
 
     numVersion: int = len(modelList)
 
@@ -143,7 +146,7 @@ if __name__ == "__main__":
     print(f"total object detection time: {end - start:.2f} seconds")
 
     outputLabelDir: Path = baseDir / "adaptiveDetectionResult" / "labels" / \
-        f"{mapName}" / f"{'_'.join(modelNameList)}"
+        "agreement" / f"{mapName}" / f"{'_'.join(modelNameList)}"
     os.makedirs(outputLabelDir, exist_ok=True)
 
     index: int = 0

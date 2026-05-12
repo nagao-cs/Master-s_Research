@@ -294,7 +294,7 @@ def computeCov(gtDatasetDirPath: Path, detDatasetDirPathList: list[Path], iouThr
         totalBBoxInstance: int = len(gtBBoxList) + len(unionFalsePositiveList)
 
         cov += (len(unanimousFalsePositiveList) +
-                len(unanimousFalseNegativeList)) / totalBBoxInstance
+                len(unanimousFalseNegativeList)) / totalBBoxInstance if totalBBoxInstance > 0 else 0
         numImage += 1
 
     cov = 1 - (cov / numImage)
@@ -338,7 +338,7 @@ def computeCer(gtDatasetDirPath: Path, detDatasetDirPathList: list[Path], iouThr
         totalBBoxInstance: int = len(gtBBoxList) + len(unionFalsePositiveList)
 
         cer += (len(unionFalsePositiveList) +
-                len(unionFalseNegativeList)) / totalBBoxInstance
+                len(unionFalseNegativeList)) / totalBBoxInstance if totalBBoxInstance > 0 else 0
 
         numImage += 1
 

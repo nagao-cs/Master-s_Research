@@ -2,37 +2,36 @@ from pathlib import Path
 import csv
 import os
 
-from src.adaptiveNversion.versionController.VersionController import VersionState
+from src.adaptiveNversion.versionController.usecaseVersionController import UseCaseVersionState
 
 
 class StatsRecorder:
     def __init__(self, modelNameList: list[str]):
         self.model: str = f"{'_'.join(modelNameList)}"
         self.numInference: int = 0
-        self.totalFLOps: float = 0.0
         self.numTransitionFromOneToN: int = 0
         self.numTransitionFromNToOne: int = 0
-        self.stateList: list[VersionState] = []
+        self.stateList: list[UseCaseVersionState] = []
 
         self.totalExecutionTime: float = 0.0
         self.throuput: float = 0.0
         self.numProcessedImage: int = 0
         self.numOneVersionDetectionCount: int = 0
         self.numNVersionDetectionCount: int = 0
-        self._previousState: VersionState = VersionState.ONE
+        self._previousState: UseCaseVersionState = UseCaseVersionState.ONE
         self._maxVersion = len(modelNameList)
 
-    def update(self, versionsState: VersionState):
+    def update(self, versionsState: UseCaseVersionState):
         self.stateList.append(versionsState)
-        if versionsState == VersionState.ONE:
+        if versionsState == UseCaseVersionState.ONE:
             self.numInference += 1
             self.numOneVersionDetectionCount += 1
-            if self._previousState == VersionState.N:
+            if self._previousState == UseCaseVersionState.N:
                 self.numTransitionFromNToOne += 1
-        elif versionsState == VersionState.N:
+        elif versionsState == UseCaseVersionState.N:
             self.numInference += self._maxVersion
             self.numNVersionDetectionCount += 1
-            if self._previousState == VersionState.ONE:
+            if self._previousState == UseCaseVersionState.ONE:
                 self.numTransitionFromOneToN += 1
 
         self._previousState = versionsState
@@ -86,10 +85,12 @@ class StatsRecorder:
                 row.append("")
 
         for i, state in enumerate(self.stateList):
-            if state == VersionState.ONE:
+            if state == UseCaseVersionState.ONE:
                 rows[i][colIdx] = "1"
-            elif state == VersionState.N:
-                rows[i][colIdx] = str(self._maxVersion)
+            elif state == UseCaseVersionState.COV_STATE:
+                rows[i][colIdx] = str("Cov")
+            elif state == UseCaseVersionState.CER_STATE:
+                rows[i][colIdx] = str("Cer")
             else:
                 raise ValueError(f"Unknown UseCaseVersionState: {state}")
 

@@ -1,10 +1,10 @@
 import argparse
 from pathlib import Path
 import os
-from boundingBox.boundingBox import DetectionBoundingBox, GroundTruthBoundingBox, ClassifiedBoundingBox, ClassifyCategory
-from Evaluation.classifier.detectionClassifier import DetectionClassifier
-from Evaluation.dataset import fileReader
-from Evaluation.metrics.confidenceScoreAnalysis import ConfidenceScoreAnalyzer
+from src.boundingBox.boundingBox import DetectionBoundingBox, GroundTruthBoundingBox, ClassifiedBoundingBox, ClassifyCategory
+from src.Evaluation.classifier.detectionClassifier import DetectionClassifier
+from src.Evaluation.dataset import fileReader
+from src.Evaluation.metrics.confidenceScoreAnalysis import ConfidenceScoreAnalyzer
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser(description="compute mAP")
@@ -35,15 +35,14 @@ if __name__ == '__main__':
 
     cwd = Path(__file__).parent
 
-    groundTruthDatasetDir = cwd / "output" / "label" / \
+    groundTruthDatasetDir = cwd.parent.parent / "output" / "label" / \
         f"{mapName}" / "front"
     if not os.path.exists(groundTruthDatasetDir):
         raise FileNotFoundError(f"{groundTruthDatasetDir} does not exist")
-
-    # detectionDatasetDir = cwd / "ObjectDetection" / "output" / \
-        # f"{mapName}" / "labels" / f"{targetModelCombination}" / "front"
-    detectionDatasetDir = cwd / "adaptiveDetectionResult" / \
-        "labels" / f"{mapName}" / f"{targetModelCombination}"
+    detectionDatasetDir = cwd.parent.parent / "oneVersionDetectionResult" / "labels" / \
+        f"{mapName}" / f"{targetModelCombination}"
+   # detectionDatasetDir = cwd.parent.parent / "adaptiveDetectionResult" / \
+   # "labels" / f"{mapName}" / f"{targetModelCombination}"
     if not os.path.exists(detectionDatasetDir):
         raise FileNotFoundError(f"{detectionDatasetDir} does not exist")
 

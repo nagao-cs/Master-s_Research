@@ -38,14 +38,18 @@ if __name__ == '__main__':
     cwd: Path = Path(__file__).parent
     baseDir: Path = cwd.parent.parent
 
-    groundTruthDatasetDir: Path = baseDir / "output" / "label" / \
-        f"{mapName}" / "front"
+    # groundTruthDatasetDir: Path = baseDir / "output" / "label" / \
+    #     f"{mapName}" / "front"
+    groundTruthDatasetDir: Path = baseDir / \
+        "GroundTruthDataset" / "labels" / "front"
     if not os.path.exists(groundTruthDatasetDir):
         raise FileNotFoundError(f"{groundTruthDatasetDir} does not exist")
     detectionDatasetDirList: list[Path] = []
     for modelName in modelNameList:
-        detectionDatasetDir: Path = baseDir / "oneVersionDetectionResult" / \
-            "labels" / f"{mapName}" / f"{modelName}"
+        # detectionDatasetDir: Path = baseDir / "oneVersionDetectionResult" / \
+        #     "labels" / f"{mapName}" / f"{modelName}"
+        detectionDatasetDir = baseDir / "oneVersionDetectionResult" / \
+            "labels" / f"{mapName}" / f"{modelName}" / "front"
         if not os.path.exists(detectionDatasetDir):
             raise FileNotFoundError(f"{detectionDatasetDir} does not exist")
 

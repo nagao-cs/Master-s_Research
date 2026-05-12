@@ -1,3 +1,4 @@
+import sys
 from logging import getLogger
 from tqdm import tqdm
 import time
@@ -6,8 +7,8 @@ import os
 import argparse
 
 from .NversionExecutor import NversionExecutor
-from .versionController.VersionController import VersionController, VersionState
-from ..boundingBox.integrator.affirmativeIntegrator import ConfidenceBaseIntegrator
+from .versionController.prevFrameDependVersionController import PrevFrameDependVersionController, VersionState
+from ..boundingBox.integrator.majorityIntegrator import MajorityIntegrator
 from .stats.statsRecorder import StatsRecorder
 
 from src.boundingBox.boundingBox import DetectionBoundingBox
@@ -90,19 +91,17 @@ if __name__ == "__main__":
 
     inputFileList: list[str] = os.listdir(inputImageDir)
 
-    CONF_THRESHOLD = 0.5
-    IOU_THRESHOLD = 0.5
-    AGREEMENT_THRESHOLD = 0.8
-    INTEGRATION_CONFIDENCE_THRESHOLD = 0.5
+    NUM_DETCTION_DIFF_THRESHOLD: int = 2
+    IOU_THRESHOLD: float = 0.5
 
     numVersion: int = len(modelList)
 
-    detectionIntegrator: ConfidenceBaseIntegrator = ConfidenceBaseIntegrator(
-        iouThreshold=IOU_THRESHOLD, confidenceThreshold=INTEGRATION_CONFIDENCE_THRESHOLD)
+    detectionIntegrator: MajorityIntegrator = MajorityIntegrator(
+        iouThreshold=IOU_THRESHOLD, maxVersion=numVersion)
     detectionExecutor: NversionExecutor = NversionExecutor(
         modelList, detectionIntegrator)
-    versionController: VersionController = VersionController(
-        confidenceScoreThreshold=CONF_THRESHOLD, agreementScoreThreshold=AGREEMENT_THRESHOLD, maxVersion=numVersion)
+    versionController: PrevFrameDependVersionController = PrevFrameDependVersionController(
+        numDetDiffThreshold=NUM_DETCTION_DIFF_THRESHOLD, maxVersion=numVersion)
     statesRecorder = StatsRecorder(modelNameList=modelNameList)
 
     # 計測開始
@@ -112,10 +111,14 @@ if __name__ == "__main__":
         if not os.path.exists(inputImagePath):
             raise FileNotFoundError(f"{inputImagePath} does not exist")
 
+        # ----------
+        # いったん毎フレーム1バージョンでNにするか判定
+        # ----------
+        versionController.state = VersionState.ONE
         if versionController.state == VersionState.ONE:
             baseDetection = detectionExecutor.executeOneVersionDetection(
                 inputImagePath)
-            versionController.updateState(detections=baseDetection)
+            versionController.updateState(BBoxList=baseDetection)
 
             if versionController.state == VersionState.N:
                 integratedBoundingBoxList, groupedBoundingBoxList = detectionExecutor.executeNMinusOneVersionDetection(
@@ -124,16 +127,8 @@ if __name__ == "__main__":
             elif versionController.state == VersionState.ONE:
                 finalDetections = baseDetection
             executeState = versionController.state
-        elif versionController.state == VersionState.N:
-            executeState = versionController.state
-            integratedBoundingBoxList, groupedBoundingBoxList = detectionExecutor.executeNVersionDetection(
-                inputImagePath)
-            versionController.updateState(
-                groupedBoundingBoxList=groupedBoundingBoxList)
-            finalDetections = integratedBoundingBoxList
 
         statesRecorder.update(executeState)
-
         outputDetectionList.append(finalDetections)
 
     # 計測終了
@@ -142,7 +137,7 @@ if __name__ == "__main__":
     statesRecorder.registerExecutionTime(executionTime)
     print(f"total object detection time: {end - start:.2f} seconds")
 
-    outputLabelDir: Path = baseDir / "adaptiveDetectionResult" / "labels" / "affirmative" / \
+    outputLabelDir: Path = baseDir / "adaptiveDetectionResult" / "prevFrame" / "labels" / \
         f"{mapName}" / f"{'_'.join(modelNameList)}"
     os.makedirs(outputLabelDir, exist_ok=True)
 
@@ -162,10 +157,11 @@ if __name__ == "__main__":
         index += 1
 
     outputStatsFilePath: Path = baseDir / \
-        "adaptiveDetectionResult" / "resultStats.csv"
+        "adaptiveDetectionResult" / "prevFrame" / "resultStats.csv"
     statesRecorder.writeStatsToCsvFile(
         statsWriteCsvFilePath=outputStatsFilePath)
 
     stateTransitionCsvFilePath: Path = baseDir / \
-        "adaptiveDetectionResult" / f"{mapName}_stateTransition.csv"
+        "adaptiveDetectionResult" / "prevFrame" / \
+        f"{mapName}_stateTransition.csv"
     statesRecorder.saveStateTransition(stateTransitionCsvFilePath)

@@ -13,7 +13,7 @@ class FrameResult:
     flops: float
 
 
-class FrameProcessor:
+class CacheFrameProcessor:
     """フレーム単位の処理を担当"""
     
     def __init__(

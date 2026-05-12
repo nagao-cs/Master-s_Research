@@ -16,20 +16,21 @@ class VersionController:
         self.confidenceScoreThreshold = confidenceScoreThreshold
         self.agreementScoreThreshold = agreementScoreThreshold
         self.maxVersion = maxVersion
+        self.uncertainty_ratio_threshold: float = 0.25
 
-    def updateState(self, detections: Optional[list[DetectionBoundingBox]] = None, groupedBoundingBoxList: Optional[list[list[DetectionBoundingBox]]] = None):
+    def updateState(self, BBoxList: Optional[list[DetectionBoundingBox]]):
         """
         detections:
           - ONE状態: 1モデルの検出結果
           - N状態:   Nモデルの検出結果
         """
         if self.state == VersionState.ONE:
-            if self._shouldSwitchToNversion(detections):
+            if self._shouldSwitchToNversion(BBoxList):
                 self.state = VersionState.N
 
-        elif self.state == VersionState.N:
-            if self._shouldSwitchToOneVersion(groupedBoundingBoxList):
-                self.state = VersionState.ONE
+        # elif self.state == VersionState.N:
+        #     if self._shouldSwitchToOneVersion(groupedBoundingBoxList):
+        #         self.state = VersionState.ONE
 
     def outputCurrentStateAtConsole(self):
         currentState = self.state
@@ -38,24 +39,23 @@ class VersionController:
         sys.stdout.flush()
 
     def _shouldSwitchToNversion(self, boundingBoxList: list[DetectionBoundingBox]) -> bool:
-        minConfidenceScore: float = 1.0
-        for boundingBox in boundingBoxList:
-            confidenceScore = boundingBox.confidenceScore
-            minConfidenceScore = min(minConfidenceScore, confidenceScore)
-
-        if minConfidenceScore < self.confidenceScoreThreshold:
-            return True
-        elif minConfidenceScore >= self.confidenceScoreThreshold:
+        if len(boundingBoxList) == 0:
             return False
+        numUncertainDet: int = sum(
+            1 for BBox in boundingBoxList if BBox.confidenceScore < self.confidenceScoreThreshold)
+        uncertainDetRatio: float = numUncertainDet / len(boundingBoxList)
+
+        if uncertainDetRatio >= self.uncertainty_ratio_threshold:
+            return True
+        return False
 
     def _shouldSwitchToOneVersion(self, groupedBoundingBoxList: list[list[DetectionBoundingBox]]) -> bool:
         agreementScore: float = self._calcAgreementScore(
             groupedBoundingBoxList)
 
-        if agreementScore > self.agreementScoreThreshold:
+        if agreementScore >= self.agreementScoreThreshold:
             return True
-        elif agreementScore <= self.agreementScoreThreshold:
-            return False
+        return False
 
     def _calcAgreementScore(self, groupedBoundingBoxList: list[list[DetectionBoundingBox]]) -> float:
         agreementScore: float = 0.0

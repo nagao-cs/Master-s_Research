@@ -1,33 +1,33 @@
-import torch
-
 from ultralytics import YOLO
-
 from .ObjectDetector import Detector
 from ..utils import utils
 from src.boundingBox.boundingBox import DetectionBoundingBox
+import torch
 
 
-class Yolov8lDetector(Detector):
+class Yolov8nTrainedDetector(Detector):
     def __init__(self):
         self.model = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"device is {self.device}")
+        # self.device = "cpu"
         self.load_model()
 
     def load_model(self):
         try:
-            self.model = YOLO("yolov8l.pt")
-            print(f"YOLOv11 model loaded")
+            self.model = YOLO(
+                "src/ObjectDetection/trainingModel/trainingyolov8n/weights/best.pt")
+            print(f"YOLOv8n model loaded")
 
         except Exception as e:
-            raise RuntimeError(f"Error loading yolov8l model: {e}")
+            raise RuntimeError(f"Error loading yolov8n model: {e}")
 
     def predict(self, imagePath):
         detectionResult = self.model.predict(
             source=imagePath,
             device=self.device,
             conf=utils.CONF_THRESHOLD,
-            # classes=[0, 2, 9, 11],
+            classes=[0, 2, 9, 11],
             verbose=False
         )[0]  # 1枚の画像を処理しても、バッチやストリームで処理してもリストで結果が返ってくるらしい。→ 最初の1つを見るためのインデックスで[0]
 

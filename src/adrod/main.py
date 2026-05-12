@@ -8,12 +8,14 @@ import time
 import yaml
 from pydantic import BaseModel
 
-from .stateController import AdrodStateController, AdrodState,ThresholdConfig
+from .stateController import AdrodStateController, ThresholdConfig
 from ..boundingBox.integrator.affirmativeIntegrator import ConfidenceBaseIntegrator
 from ..boundingBox.integrator.majorityIntegrator import MajorityIntegrator
 from src.boundingBox.boundingBox import DetectionBoundingBox
-from .detectionExecuter import FrameProcessor
+from .detectionExecuter import CacheFrameProcessor
 from src.Evaluation.dataset import fileReader
+from src.file_lib.file_writer import FileWriter
+from .executionRecorder import ExecutionRecorder
 from src.ObjectDetection.models.FLOPsDict import FLOPs_Dict
 
 class AdrodConfig(BaseModel):
@@ -63,7 +65,6 @@ if __name__ == "__main__":
     # -----------
     detectionBaseDir: Path = base_dir / "oneVersionDetectionResult" / "labels" / config.map
 
-    print("Loading detection results from cached files...")
     detection_cache: dict[str, list[list[DetectionBoundingBox]]] = {}
 
     for modelName in model_name_list:
@@ -107,9 +108,10 @@ if __name__ == "__main__":
     logger.disabled = True
 
     state_controller = AdrodStateController(config.thresholds)
+    execution_recorder = ExecutionRecorder()
     integrator = _create_integrator(config)
 
-    processor = FrameProcessor(
+    processor = CacheFrameProcessor(
         state_controller,
         integrator,
         detection_cache,
@@ -117,50 +119,31 @@ if __name__ == "__main__":
         config.model_2,
         config.model_3
     )
-    total_FLOPs: float = 0.0
-
-    outputDetectionList: list[list[DetectionBoundingBox]] = []
-    exe_state_record: list[AdrodState] = []
 
     # ----------
     # 計測開始
     # ----------
-    print("Processing with escalation strategy...")
+    print("Processing with Adrod")
     start: float = time.time()
 
     for frame_idx in tqdm(range(numFrames)):
         frame_result = processor.process(frame_idx)
-        outputDetectionList.append(frame_result.detections)
-        total_FLOPs += frame_result.flops
-        exe_state: AdrodState = frame_result.state
+        execution_recorder.record_frame_result(frame_result)
         
-        # ENSEMBLE状態から自動的にPAIRに遷移
-        if state_controller.state == AdrodState.ENSEMBLE:
-            state_controller.state = AdrodState.PAIR
 
-        exe_state_record.append(exe_state)
 
     # 計測終了
     end: float = time.time()
     executionTime: float = end - start
     print(f"\nTotal processing time: {executionTime:.2f} seconds")
 
-    # -----------
     # 結果を保存
-    # -----------
-    for idx, detections in enumerate(outputDetectionList):
+    file_writer: FileWriter = FileWriter(output_dir=outputLabelDir)
+    for idx, detections in enumerate(execution_recorder.get_detections()):
         output_path = outputLabelDir / f"{idx:06d}.txt"
-        with open(output_path, 'w') as f:
-            for bbox in detections:
-                f.write(
-                    f"{bbox.classId} {bbox.xCenter} {bbox.yCenter} "
-                    f"{bbox.width} {bbox.height} {bbox.confidenceScore}\n"
-                )
+        file_writer.write(file_name=f"{idx:06d}", detection_list=detections)
 
-    # -----------
     # 統計情報の出力
-    # -----------
-    state_counter = Counter(exe_state_record)
-    print(f"\nLevel distribution: {dict(state_counter)}")
-    print(f"Results saved to: {outputLabelDir}")
-    print(f"総計算量: {total_FLOPs} GFLPs, {total_FLOPs / 17400} cost")
+    stats = execution_recorder.get_statistics()
+    print(f"\nLevel distribution: {dict(stats["state_distribution"])}")
+    print(f"総計算量: {stats["total_flops"]} GFLPs, {stats["flops_cost"]} cost")

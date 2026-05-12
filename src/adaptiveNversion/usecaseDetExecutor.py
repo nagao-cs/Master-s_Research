@@ -1,4 +1,4 @@
-from .integrator.integrator import Integrator
+from ..boundingBox.integrator.integrator import Integrator
 from src.boundingBox.boundingBox import DetectionBoundingBox
 
 

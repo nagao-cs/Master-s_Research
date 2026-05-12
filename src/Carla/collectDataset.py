@@ -4,14 +4,15 @@ import time
 import sys
 import os
 import cv2
+from pathlib import Path
 
 # 自作モジュールのインポート
 try:
-    from configuration import SimulationConfig
-    from manager import CarlaWorldManager, ActorManager
-    from egoVehicle import EgoVehicle
-    from labelGenerator import LabelGenerator
-    from datasetWriter import DatasetWriter
+    from .configuration import SimulationConfig
+    from .manager import CarlaWorldManager, ActorManager
+    from .egoVehicle import EgoVehicle
+    from .labelGenerator import LabelGenerator
+    from .datasetWriter import DatasetWriter
 except ImportError as e:
     print(f"モジュールのインポートに失敗しました: {e}")
     sys.exit(1)
@@ -35,7 +36,7 @@ def parse_arguments():
     parser.add_argument("--walkers", type=int, default=50, help="NPC歩行者の数")
     parser.add_argument("--start_frame", type=int,
                         default=0, help="保存ファイル名の開始番号")
-    parser.add_argument("--ratio", type=float, default=0.7,
+    parser.add_argument("--ratio", type=float, default=0.5,
                         help="全スポーンポイントに対する車両の割合 (0.0 - 1.0)")
     return parser.parse_args()
 
@@ -47,12 +48,16 @@ def collect_on_single_map(map_name, args, start_frame_idx):
     """
     logger.info(f"=== マップ開始: {map_name} ===")
 
+    baseDir: Path = Path(__file__).parent.parent.parent
+    output_base_dir: Path = baseDir / "GroundTruthDataset"
+    print(output_base_dir)
     # 1. 設定の更新
-    cfg = SimulationConfig()
+    cfg: SimulationConfig = SimulationConfig()
     cfg.map_name = map_name
     cfg.num_walkers = args.walkers
     cfg.time_duration = args.duration
-    cfg.base_output_dir = "C:\\CARLA_Latest\\WindowsNoEditor\\trainDataset"
+    cfg.outputBaseDir = output_base_dir
+    os.makedirs(output_base_dir, exist_ok=True)
     cfg.create_directories()
 
     # 2. マネージャーの初期化
@@ -104,7 +109,7 @@ def collect_on_single_map(map_name, args, start_frame_idx):
             # 1. 時間を進める (Tick)
             target_frame_id = world_mgr.world.tick()
 
-            # 進捗表示
+            # 50フレームごとに取得
             if i % 50 == 0:
                 print(
                     f"  Map: {map_name} | Progress: {i}/{frames_per_map} | Total Saved: {current_frame_idx}")

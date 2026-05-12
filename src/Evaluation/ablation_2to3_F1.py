@@ -5,7 +5,7 @@ import os
 from src.boundingBox.boundingBox import DetectionBoundingBox, GroundTruthBoundingBox, ClassifiedBoundingBox, ClassifyCategory
 from .classifier.detectionClassifier import DetectionClassifier
 from .dataset import fileReader
-from .metrics import mAP
+from .metrics import f1Score
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser(description="compute mAP")
@@ -26,14 +26,9 @@ if __name__ == '__main__':
         required=True
     )
     argparser.add_argument(
-        "--is_adaptive",
-        type=str,
-        required=True
-    )
-    argparser.add_argument(
         "--integrate",
         type=str,
-        default="affirmative"
+        required=True
     )
     args = argparser.parse_args()
     print(args)
@@ -50,21 +45,10 @@ if __name__ == '__main__':
 
     groundTruthDatasetDir = baseDir / "output" / "label" / \
         f"{mapName}" / "front"
-    # groundTruthDatasetDir: Path = baseDir / \
-        # "GroundTruthDataset" / "labels" / "front"
     if not os.path.exists(groundTruthDatasetDir):
         raise FileNotFoundError(f"{groundTruthDatasetDir} does not exist")
-    if args.is_adaptive == 'True':  # 適応的処理の場合
-        detectionDatasetDir = baseDir / "adaptiveDetectionResult" / "escalation" / "labels" / \
-            f"{mapName}" / f"{targetModelCombination}" / f"{integrate_way}"
-    elif len(modelNameList) > 1:  # 常にNバージョンの場合
-        detectionDatasetDir = baseDir / "NversionDetectionResult" / "labels" / \
-            f"{mapName}" / f"{targetModelCombination}" / f"{integrate_way}"
-    else:  # 常に1バージョンの場合
-        detectionDatasetDir = baseDir / "oneVersionDetectionResult" / \
-            "labels" / f"{mapName}" / f"{targetModelCombination}"
-        # detectionDatasetDir = baseDir / "oneVersionDetectionResult" / \
-            # "labels" / f"{mapName}" / f"{targetModelCombination}" / "front"
+    detectionDatasetDir = baseDir / "adaptiveDetectionResult" / "ablation_2to3" / f"{integrate_way}" / "labels" / \
+        f"{mapName}" / f"{targetModelCombination}"
     if not os.path.exists(detectionDatasetDir):
         raise FileNotFoundError(f"{detectionDatasetDir} does not exist")
 
@@ -95,15 +79,10 @@ if __name__ == '__main__':
 
         classifiedBoundingBoxList.extend(classifiedBoundingBoxListPerFrame)
 
-    # boundingboxListを信頼度スコアで並べ替える
-    sortedClassifiedBoundingBoxList: list[ClassifiedBoundingBox] = sorted(
-        classifiedBoundingBoxList, key=lambda boundingbox: boundingbox.confidenceScore, reverse=True)
+    # f1Scoreを計算する
+    f1, precision, recall = f1Score.computeF1Score(classifiedBoundingBoxList)
 
-    # mAPを計算する
-    # 0 = pedestrian, 2 = vehicle, 9 = trafficlight, 11 = trafficsign
-    targetClassIdList = [0, 2, 9, 11]
-    mAPValue, classIdApDict = mAP.computeMeanAP(
-        sortedClassifiedBoundingBoxList, targetClassIdList)
-
+    print(f"precision = {precision:.3f}")
+    print(f"recall = {recall:.3f}")
     print(
-        f"mAP = {mAPValue}\nAP = {classIdApDict}\nwith iouThreshold = {iouThreshold}")
+        f"f1Score = {f1:.3f}")

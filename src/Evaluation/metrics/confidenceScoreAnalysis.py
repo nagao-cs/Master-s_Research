@@ -3,7 +3,7 @@
 import numpy as np
 from dataclasses import dataclass
 from typing import Dict, List
-from boundingBox.boundingBox import ClassifiedBoundingBox, ClassifyCategory
+from src.boundingBox.boundingBox import ClassifiedBoundingBox, ClassifyCategory
 
 
 @dataclass

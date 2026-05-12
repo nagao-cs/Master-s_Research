@@ -1,13 +1,11 @@
-import torch
-
 from ultralytics import YOLO
-
 from .ObjectDetector import Detector
 from ..utils import utils
 from src.boundingBox.boundingBox import DetectionBoundingBox
+import torch
 
 
-class Yolov8lDetector(Detector):
+class Yolov26xDetector(Detector):
     def __init__(self):
         self.model = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -16,11 +14,11 @@ class Yolov8lDetector(Detector):
 
     def load_model(self):
         try:
-            self.model = YOLO("yolov8l.pt")
-            print(f"YOLOv11 model loaded")
+            self.model = YOLO("yolo26n.pt")
+            print(f"YOLO26x model loaded")
 
         except Exception as e:
-            raise RuntimeError(f"Error loading yolov8l model: {e}")
+            raise RuntimeError(f"Error loading yolov8n model: {e}")
 
     def predict(self, imagePath):
         detectionResult = self.model.predict(

@@ -7,6 +7,7 @@ def computeF1Score(classifiedBoundingBoxList: list[ClassifiedBoundingBox]) -> fl
     numFalseNegative: int = 0
 
     VALID_CLASS_ID = (0, 2, 9, 11)
+    # VALID_CLASS_ID = (0, 2)
 
     for classifiedBoundingBox in classifiedBoundingBoxList:
         if classifiedBoundingBox.classId not in VALID_CLASS_ID:

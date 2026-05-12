@@ -2,6 +2,11 @@ from src.boundingBox.boundingBox import GroundTruthBoundingBox, DetectionBoundin
 from src.Evaluation.utils import utils
 
 
+class FileReader:
+    def __init__(self):
+        pass
+    
+    def read_gt
 def convertGroundTruthFileToBoundingBoxList(groundTruthFilePath: str) -> list[GroundTruthBoundingBox]:
     groundTruthBoundingBoxList: list[GroundTruthBoundingBox] = list()
 

@@ -1,4 +1,5 @@
 from . import BoundingBox
+from src.ObjectDetection.models.ObjectDetector import Detector
 
 
 def groupingBoundingBox(detectionModelDict: dict[object, list[BoundingBox]], iouThreshold: float) -> list[list[BoundingBox]]:

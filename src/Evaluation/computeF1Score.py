@@ -25,6 +25,11 @@ if __name__ == '__main__':
         nargs="+",
         required=True
     )
+    argparser.add_argument(
+        "--is_adaptive",
+        type=str,
+        required=True
+    )
     args = argparser.parse_args()
     print(args)
 
@@ -41,15 +46,17 @@ if __name__ == '__main__':
         f"{mapName}" / "front"
     if not os.path.exists(groundTruthDatasetDir):
         raise FileNotFoundError(f"{groundTruthDatasetDir} does not exist")
-    if len(modelNameList) > 1:
-        detectionDatasetDir = baseDir / "adaptiveDetectionResult" / "labels" / \
-            "affirmative" / f"{mapName}" / f"{targetModelCombination}"
-    else:
+    if args.is_adaptive == 'True':  # 適応的処理の場合
+        detectionDatasetDir = baseDir / "adaptiveDetectionResult" / "escalation" / "labels" / \
+            f"{mapName}" / f"{targetModelCombination}"
+    elif len(modelNameList) > 1:  # 常にNバージョンの場合
+        detectionDatasetDir = baseDir / "NversionDetectionResult" / "labels" / \
+            f"{mapName}" / f"{targetModelCombination}"
+    else:  # 常に1バージョンの場合
         detectionDatasetDir = baseDir / "oneVersionDetectionResult" / \
             "labels" / f"{mapName}" / f"{targetModelCombination}"
     if not os.path.exists(detectionDatasetDir):
         raise FileNotFoundError(f"{detectionDatasetDir} does not exist")
-
     classifiedBoundingBoxList: list[ClassifiedBoundingBox] = list()
     detectionClassifier: DetectionClassifier = DetectionClassifier(
         iouThreshold=iouThreshold)
@@ -80,7 +87,7 @@ if __name__ == '__main__':
     # f1Scoreを計算する
     f1, precision, recall = f1Score.computeF1Score(classifiedBoundingBoxList)
 
-    print(f"precision = {precision}")
-    print(f"recall = {recall}")
+    print(f"precision = {precision:.3f}")
+    print(f"recall = {recall:.3f}")
     print(
-        f"f1Score = {f1}")
+        f"f1Score = {f1:.3f}")

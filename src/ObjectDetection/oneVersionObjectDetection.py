@@ -40,6 +40,9 @@ if __name__ == "__main__":
     elif modelName == "yolov5n":
         from src.ObjectDetection.models.Yolov5n import Yolov5nDetector
         model = Yolov5nDetector()
+    elif modelName == "yolov26x":
+        from src.ObjectDetection.models.Yolo26x import Yolov26xDetector
+        model = Yolov26xDetector()
     elif modelName == "rtdetr":
         from src.ObjectDetection.models.rtDETR import RTDETRDetector
         model = RTDETRDetector()
@@ -58,16 +61,21 @@ if __name__ == "__main__":
     elif modelName == "retinanet":
         from src.ObjectDetection.models.retinanet import RetinanetDetector
         model = RetinanetDetector()
+    elif modelName == "trainYolo":
+        from src.ObjectDetection.models.trainedYolov8n import Yolov8nTrainedDetector
+        model = Yolov8nTrainedDetector()
     else:
         raise ValueError(
             f"モデル '{modelName}' はサポートされていません。\n"
         )
 
     cwd: Path = Path(__file__).parent
-    baseDir: Path = cwd.parent.parent
+    baseDir: Path = cwd.parent.parent  # WindowsNoEditor
 
     inputImageDir: Path = baseDir / "output" / "image" / \
         f"{mapName}" / "original" / "front"
+    # dataset_dir: Path = baseDir / "GroundTruthDataset"
+    # inputImageDir: Path = dataset_dir / "images" / "front"
 
     outputDetectionList: list[list[DetectionBoundingBox]] = list()
 
@@ -84,16 +92,13 @@ if __name__ == "__main__":
     inputImagePathList: list[Path] = [
         inputImageDir / inputImageFile for inputImageFile in os.listdir(inputImageDir)]
 
-    CONF_THRESHOLD = 0.5
-    IOU_THRESHOLD = 0.5
-
     # 計測開始
     start: float = time.time()
     for inputImagePath in tqdm(inputImagePathList):
         if not os.path.exists(inputImagePath):
             raise FileNotFoundError(f"{inputImagePath} does not exist")
 
-        finalDetections = model.predict(imagePath=inputImagePath)
+        finalDetections = model.predict(image_path=inputImagePath)
         outputDetectionList.append(finalDetections)
 
     # 計測終了
@@ -109,7 +114,7 @@ if __name__ == "__main__":
     os.makedirs(outputImageDir, exist_ok=True)
 
     index: int = 0
-    for inputImagePath, outputLabelList in tqdm(zip(inputImagePathList, outputDetectionList), desc="[image save]", total=len(outputDetectionList)):
+    for inputImagePath, outputLabelList in tqdm(zip(inputImagePathList, outputDetectionList), desc="[result save]", total=len(outputDetectionList)):
         outputImagePath: Path = outputImageDir / f"{index:06}.png"
         outputLabelPath: Path = outputLabelDir / f"{index:06}.txt"
 

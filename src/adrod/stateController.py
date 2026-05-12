@@ -120,6 +120,9 @@ class AdrodStateController:
             AdrodState.ENSEMBLE: EnsembleStateDecisionStrategy(self.thresholds),
         }
         
+        # stateの変化を記録
+        self.exe_state_recorder: list[AdrodState] = []
+        
         # record each state freaquency
         self.adrod_state_counter = {
             AdrodState.SOLO: 0,
@@ -144,7 +147,7 @@ class AdrodStateController:
         self,
         detections: Optional[list[DetectionBoundingBox]] = None,
         bbox_groups: Optional[list[list[DetectionBoundingBox]]] = None,
-    ) -> AdrodState:
+    ) -> None:
         """
         現在の状態と入力に基づいて次の状態を決定
         
@@ -162,12 +165,11 @@ class AdrodStateController:
         else:
             self._state = strategy.decide(bbox_groups or [])
         
-        self.adrod_state_counter[self._state] += 1
         
-        return self._state
     
     def record_execution(self, state: AdrodState):
         """実行されたstateを記録"""
+        self.exe_state_recorder.append(state)
         self.adrod_state_counter[state] += 1
     
     def get_stats(self) -> dict:

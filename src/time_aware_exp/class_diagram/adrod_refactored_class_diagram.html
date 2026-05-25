@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>time_aware_exp クラス図</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        .mermaid { display: flex; justify-content: center; }
+    </style>
+</head>
+<body>
+    <h1>time_aware_exp クラス図</h1>
+    <div class="mermaid">
+classDiagram
+    %% ============ Main Entry ============
+    class main {
+        +parse_args()
+        +build_runner()
+        +main()
+    }
+
+    %% ============ Runner Hierarchy ============
+    class BaseRunner {
+        #cfg
+        #base_dir
+        #cfg_path
+        +run()
+        #build_detection()*
+        #build_context()
+        #save_result()
+        #evaluate()
+    }
+
+    class CacheRunner {
+        +build_detection()
+    }
+
+    class OnlineRunner {
+        +build_detection()
+    }
+
+    class CacheFrameSource {
+        +get(frame_idx)
+    }
+
+    class VideoFrameSource {
+        -cap
+        +get(frame_idx)
+    }
+
+    %% ============ State Pattern ============
+    class AdrodState {
+        +exe_detection(ctx, frame_ref)*
+    }
+
+    class SingleState {
+        +exe_detection(ctx, frame_ref)
+    }
+
+    class TwoState {
+        +exe_detection(ctx, frame_ref)
+        -_calc_jaccard(bbox_groups)
+    }
+
+    class ThreeState {
+        +exe_detection(ctx, frame_ref)
+    }
+
+    class StateContext {
+        -_detection: DetectionStrategy
+        +thresholds: ThresholdConfig
+        +integrator
+        +tracker: SortTracker
+        +m1, m2, m3: str
+        +state: AdrodState
+        +process(frame_ref)
+        +detect(model, frame_ref)
+        +transition(next_state)
+        +reset()
+    }
+
+    %% ============ Strategy Pattern ============
+    class DetectionStrategy {
+        +detect(model, frame_ref)*
+    }
+
+    class CacheDetectionStrategy {
+        -_cache: dict
+        +detect(model, frame_ref)
+    }
+
+    class ModelDetectionStrategy {
+        -_infer_fns: dict
+        +detect(model, frame_ref)
+    }
+
+    %% ============ Data Classes ============
+    class FrameInput {
+        +frame_idx: int
+        +image: ndarray | None
+    }
+
+    class FrameResult {
+        +detections: list[DetectionBoundingBox]
+        +state: int
+        +flops: float
+    }
+
+    class ThresholdConfig {
+        +theta_high: float
+        +theta_low: float
+        +theta_track: float
+    }
+
+    class SortConfig {
+        +iou_threshold: float
+        +max_age: int
+        +min_hits: int
+    }
+
+    class AdrodConfig {
+        +map: str
+        +integrate_way: str
+        +model_1, model_2, model_3: str
+        +iou_threshold: int
+        +thresholds: ThresholdConfig
+        +sort: SortConfig
+    }
+
+    %% ============ Other Components ============
+    class SortTracker {
+        -_cfg: SortConfig
+        -_sorters: dict
+        -_prev_track_ids: set
+        +update(detections)
+        +reset()
+        -_get_sorter(label)
+    }
+
+    class TrackingResult {
+        +lost_count: int
+        +new_count: int
+        +total_tracked: int
+    }
+
+    class ExecutionRecorder {
+        -detection_record: list
+        -exe_state_record: list
+        -total_flops: float
+        +record_frame_result(frame_result)
+        +get_detections()
+        +get_statistics()
+        +reset()
+    }
+
+    %% ============ Relationships ============
+    
+    main --> BaseRunner: creates
+
+    BaseRunner <|-- CacheRunner
+    BaseRunner <|-- OnlineRunner
+
+    CacheRunner --> CacheFrameSource
+    OnlineRunner --> VideoFrameSource
+
+    BaseRunner --> StateContext: builds via factory
+
+    BaseRunner --> ExecutionRecorder
+    
+    StateContext --> AdrodState: uses
+    StateContext --> DetectionStrategy: uses
+    StateContext --> SortTracker: uses
+
+    AdrodState <|-- SingleState
+    AdrodState <|-- TwoState
+    AdrodState <|-- ThreeState
+
+    SingleState --> TwoState: transition
+    TwoState --> SingleState: transition
+    TwoState --> ThreeState: transition
+
+    DetectionStrategy <|-- CacheDetectionStrategy
+    DetectionStrategy <|-- ModelDetectionStrategy
+
+    StateContext --> ThresholdConfig
+    StateContext --> AdrodConfig
+    StateContext --> TrackingResult: receives
+
+    SortTracker --> TrackingResult: returns
+    SortTracker --> SortConfig
+
+    ExecutionRecorder --> FrameResult: records
+    
+    FrameInput --|> StateContext: passed to process
+    StateContext --|> FrameResult: returns
+    FrameResult --|> ExecutionRecorder: recorded
+    </div>
+</body>
+</html>

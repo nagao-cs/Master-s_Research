@@ -1,0 +1,225 @@
+
+<style>
+h2.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+#diagram svg { width: 100% !important; max-width: 100%; height: auto; }
+</style>
+<h2 class="sr-only">AdRODシステム全体のUMLクラス図。BoundingBox階層、SORTトラッカー、インテグレータ、AdRODコアの4グループを示す。</h2>
+<div id="diagram" style="padding: 8px 0; overflow-x: auto;"></div>
+<script type="module">
+import mermaid from 'https://esm.sh/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+await document.fonts.ready;
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'base',
+  fontFamily: '"Anthropic Sans", sans-serif',
+  themeVariables: {
+    darkMode: dark,
+    fontSize: '12px',
+    fontFamily: '"Anthropic Sans", sans-serif',
+    lineColor: dark ? '#9c9a92' : '#73726c',
+    textColor: dark ? '#c2c0b6' : '#3d3d3a',
+    primaryColor: dark ? '#3C3489' : '#EEEDFE',
+    primaryTextColor: dark ? '#CECBF6' : '#26215C',
+    primaryBorderColor: dark ? '#7F77DD' : '#534AB7',
+    secondaryColor: dark ? '#085041' : '#E1F5EE',
+    secondaryTextColor: dark ? '#9FE1CB' : '#04342C',
+    secondaryBorderColor: dark ? '#1D9E75' : '#0F6E56',
+    tertiaryColor: dark ? '#444441' : '#F1EFE8',
+    tertiaryTextColor: dark ? '#D3D1C7' : '#2C2C2A',
+    tertiaryBorderColor: dark ? '#888780' : '#5F5E5A',
+    noteBkgColor: dark ? '#3C3489' : '#EEEDFE',
+    noteTextColor: dark ? '#CECBF6' : '#26215C',
+  },
+  classDiagram: { useMaxWidth: true }
+});
+
+const diagram = `classDiagram
+  namespace BoundingBox_Layer {
+    class BoundingBox {
+      <<abstract>>
+      +float xCenter
+      +float yCenter
+      +float width
+      +float height
+      +int classId
+      +computeArea() float
+      +computeIoU(bbox) float
+    }
+    class DetectionBoundingBox {
+      +float confidenceScore
+    }
+    class GroundTruthBoundingBox {
+    }
+    class ClassifiedBoundingBox {
+      +float confidenceScore
+      +ClassifyCategory classifyCategory
+    }
+    class ClassifyCategory {
+      <<enumeration>>
+      TP
+      FP
+      FN
+    }
+  }
+
+  namespace SORT_Layer {
+    class KalmanBoxTracker {
+      +int id
+      +int time_since_update
+      +int hits
+      +int hit_streak
+      +int age
+      +update(bbox)
+      +predict() ndarray
+      +get_state() ndarray
+      +reset_count()$
+    }
+    class Sort {
+      +int max_age
+      +int min_hits
+      +float iou_threshold
+      +int frame_count
+      +update(dets) ndarray
+      +reset()
+    }
+  }
+
+  namespace Integration_Layer {
+    class Integrator {
+      <<abstract>>
+      +integrat()
+    }
+    class ConfidenceBaseIntegrator {
+      +float iouThreshold
+      +float confidenceThreshold
+      +__call__(dets) tuple
+    }
+    class MajorityIntegrator {
+      +float iouThreshold
+      +int maxVersion
+      +__call__(dets) tuple
+    }
+    class GroupingBoundingBox {
+      <<utility>>
+      +groupingBoundingBox(modelDict, iouThreshold) list
+    }
+  }
+
+  namespace AdROD_Core {
+    class AdrodConfig {
+      +str model_1
+      +str model_2
+      +str model_3
+      +str integrate_way
+      +float iou_threshold
+      +ThresholdConfig thresholds
+      +SortConfig sort
+    }
+    class ThresholdConfig {
+      +float theta_track
+      +float theta_high
+      +float theta_low
+      +float tau_p
+    }
+    class SortConfig {
+      +int max_age
+      +int min_hits
+      +float iou_threshold
+    }
+    class AdrodState {
+      <<enumeration>>
+      SOLO
+      PAIR
+      ENSEMBLE
+    }
+    class TrackingResult {
+      <<dataclass>>
+      +int lost_count
+      +int new_count
+      +int total_tracked
+    }
+    class SortTracker {
+      -SortConfig _cfg
+      -dict~str,Sort~ _sorters
+      -set~int~ _prev_track_ids
+      +update(detections) TrackingResult
+      +reset()
+    }
+    class AdrodStateController {
+      -ThresholdConfig _th
+      -SortTracker _tracker
+      -AdrodState _state
+      +state AdrodState
+      +decide_from_solo(detections)
+      +decide_from_pair(bbox_groups)
+      +decide_from_ensemble()
+      +reset()
+      -_calc_u_track(tracking) float
+      -_calc_jaccard(bbox_groups) float
+    }
+    class FrameResult {
+      <<dataclass>>
+      +list~DetectionBoundingBox~ detections
+      +AdrodState state
+      +float flops
+    }
+    class DetectionExecutor {
+      -AdrodStateController _ctrl
+      -Integrator _integrator
+      -dict _cache
+      -str _m1, _m2, _m3
+      +process(frame_idx) FrameResult
+      -_run_solo(frame_idx) FrameResult
+      -_run_pair(frame_idx) FrameResult
+      -_run_ensemble(frame_idx) FrameResult
+    }
+    class ExecutionRecorder {
+      -list detection_record
+      -list exe_state_record
+      -float total_flops
+      +record_frame_result(frame_result)
+      +get_detections() list
+      +get_statistics() dict
+      +reset()
+    }
+  }
+
+  BoundingBox <|-- DetectionBoundingBox
+  BoundingBox <|-- GroundTruthBoundingBox
+  BoundingBox <|-- ClassifiedBoundingBox
+  ClassifiedBoundingBox --> ClassifyCategory
+
+  Sort *-- KalmanBoxTracker : manages list
+
+  Integrator <|-- ConfidenceBaseIntegrator
+  Integrator <|-- MajorityIntegrator
+  ConfidenceBaseIntegrator ..> GroupingBoundingBox : calls
+  MajorityIntegrator ..> GroupingBoundingBox : calls
+
+  AdrodConfig *-- ThresholdConfig
+  AdrodConfig *-- SortConfig
+
+  SortTracker *-- Sort : per class label
+  SortTracker --> SortConfig : configured by
+  SortTracker ..> TrackingResult : returns
+
+  AdrodStateController *-- SortTracker
+  AdrodStateController --> ThresholdConfig
+  AdrodStateController --> AdrodState : manages
+  AdrodStateController ..> TrackingResult : reads
+
+  DetectionExecutor --> AdrodStateController : delegates state
+  DetectionExecutor --> Integrator : uses
+  DetectionExecutor ..> FrameResult : returns
+  DetectionExecutor ..> DetectionBoundingBox : reads cache
+
+  FrameResult --> AdrodState
+  FrameResult o-- DetectionBoundingBox
+
+  ExecutionRecorder --> FrameResult : aggregates
+`;
+
+const { svg } = await mermaid.render('adrod-full-svg', diagram);
+document.getElementById('diagram').innerHTML = svg;
+</script>

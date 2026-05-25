@@ -29,13 +29,17 @@ class TrackerEvaluator:
         ground_truth_dir: str = None,
         input_image_dir: str = None,
         output_dir: str = None,
+        max_age: int = 1,
+        min_hit: int = 1,
         iou_threshold: float = 0.5
     ):
         self.model_name = model_name
         self.map_name = map_name
-        self.ground_truth_dir = Path(ground_truth_dir)
-        self.input_image_dir = Path(input_image_dir)
-        self.output_dir = Path(output_dir or "src/time_aware_exp/tracker/result")
+        self.ground_truth_dir = ground_truth_dir
+        self.input_image_dir = input_image_dir
+        self.output_dir = output_dir
+        self.max_age = max_age
+        self.min_hit = min_hit
         self.iou_threshold = iou_threshold
         
         # 出力ディレクトリ作成
@@ -52,8 +56,8 @@ class TrackerEvaluator:
         # Tracker初期化
         sort_cfg = SortConfig(
             iou_threshold=self.iou_threshold,
-            max_age=1,
-            min_hits=1
+            max_age=self.max_age,
+            min_hits=self.min_hit
         )
         self.tracker = SortTracker(sort_cfg)
         

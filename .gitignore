@@ -29,6 +29,7 @@ __pycache__/
 /.vscode
 *.csv
 *.jpg
+*.txt
 
 # -----------
 # venv関連

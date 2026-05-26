@@ -1,45 +1,27 @@
+import os
 from .base_runner import BaseRunner
 
 from ..factory.detection_factory import (
     build_model_detection
 )
 
-from ..strategy.frame_input import FrameInput
-
-
-class VideoFrameSource:
-
-    def __init__(self, cap):
-
-        self.cap = cap
-
-    def get(self, frame_idx):
-
-        success, image = self.cap.read()
-
-        if not success:
-            raise RuntimeError("Failed to read frame")
-
-        return FrameInput(
-            frame_idx=frame_idx,
-            image=image
-        )
-
 
 class OnlineRunner(BaseRunner):
-
-    def build_detection(self):
-
-        detection = build_model_detection(self.cfg)
-
-        import cv2
-
-        cap = cv2.VideoCapture("video.mp4")
-
-        num_frames = int(
-            cap.get(cv2.CAP_PROP_FRAME_COUNT)
-        )
-
-        frame_source = VideoFrameSource(cap)
-
-        return detection, frame_source, num_frames
+    def build_detection_source(self):
+        input_image_dir = self.base_dir / "output" / "image" / self.cfg.map / "original" / "front"
+        
+        if not input_image_dir.exists():
+            raise FileNotFoundError(F"directory does not exits: {input_image_dir}")
+        
+        input_image_paths = [
+            input_image_dir / input_image_name 
+            for input_image_name in os.listdir(input_image_dir)
+        ]
+        
+        return input_image_paths
+    
+    def execute_detection(self):
+        self.context.ready_model()
+        for input_image_path in self.frame_source:
+            frame_result = self.context.process_image(input_image_path)
+            self.recorder.record_frame_result(frame_result)

@@ -17,18 +17,18 @@ from src.boundingBox.integrator.majorityIntegrator import (
 def build_integrator(cfg: AdrodConfig):
     if cfg.integrate_way == "affirmative":
         return ConfidenceBaseIntegrator(
-            iouThreshold=0.5,
+            iouThreshold=cfg.iou_threshold,
             confidenceThreshold=0.0
         )
     elif cfg.integrate_way == "conf_base":
 
         return ConfidenceBaseIntegrator(
-            iouThreshold=0.5,
+            iouThreshold=cfg.iou_threshold,
             confidenceThreshold=cfg.thresholds.tau_p
         )
     elif cfg.integrate_way == "consensus":
         return MajorityIntegrator(
-            iouThreshold=0.5,
+            iouThreshold=cfg.iou_threshold,
             maxVersion=3
         )
     raise ValueError(

@@ -6,9 +6,6 @@ from src.Evaluation.dataset import fileReader
 from .base_runner import BaseRunner
 
 
-from ..strategy.frame_input import FrameInput
-
-
 class CacheRunner(BaseRunner):
     def build_detection_source(self):
         self.model_names = [

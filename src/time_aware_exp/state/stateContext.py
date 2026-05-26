@@ -11,6 +11,8 @@ State パターンにおける Context クラス。
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from src.boundingBox.boundingBox import DetectionBoundingBox
 from ..config.config import ThresholdConfig
 from ..strategy.detectionStrategy import DetectionStrategy
@@ -25,7 +27,6 @@ class StateContext:
     AdROD の State パターン Context。
 
     Args:
-        detection:     検出取得 Strategy（Cache / Model を差し替える）
         thresholds:    遷移判定に使う閾値群
         uncertainty:   SOLO→PAIR の不確実性メトリクス（Strategy）
         integrator:    複数モデルの検出結果を統合する callable
@@ -50,27 +51,29 @@ class StateContext:
         self.m2 = m2
         self.m3 = m3
         self.state: AdrodState = initial_state
+        
+        self.models = {}
 
     # ── 外部エントリポイント ──────────────────────────────────
 
     def process_cache(self, frame):
         return self.state.process_cache(self, frame)
         
-    def process(self, frame_ref) -> FrameResult:
+    def process_image(self, input_image_path: Path) -> FrameResult:
         """
         1フレームを処理して FrameResult を返す。
         """
-        return self.state.exe_detection(self, frame_ref)
+        return self.state.exe_detection(self, input_image_path)
 
-    # ── 検出（State から呼ぶ） ────────────────────────────────
-
-    def detect(self, model: str, frame_ref: Any) -> list[DetectionBoundingBox]:
-        """
-        Strategy に従って指定モデルの検出結果を返す。
-        State はこのメソッドを通じて検出結果を取得する。
-        """
-        return self._detection.detect(model, frame_ref)
-
+    def ready_model(self):
+        """必要なモデルを起動しておく"""
+        from ..factory.detection_factory import build_single_model
+        
+        for model_name in [self.m1, self.m2, self.m3]:
+            if model_name not in self.models:
+                self.models[model_name] = build_single_model(model_name)
+                print(f"✓ Model '{model_name}' loaded")
+                
     # ── 状態遷移（State から呼ぶ） ───────────────────────────
 
     def transition(self, next_state: AdrodState) -> None:

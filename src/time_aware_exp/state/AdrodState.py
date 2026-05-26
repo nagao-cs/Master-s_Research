@@ -68,16 +68,19 @@ class SingleState(AdrodState):
             flops=FLOPs_Dict[ctx.m1],
         )
 
-    def exe_detection(self, ctx: StateContext, frame_ref: Any) -> FrameResult:
-        dets_m1 = ctx.detect(ctx.m1, frame_ref)
-        u = ctx.uncertainty.calculate(dets_m1)
-
-        if u >= ctx.thresholds.theta_track:
+    def exe_detection(self, ctx: StateContext, input_image_path) -> FrameResult:
+        det_m1 = ctx.models[ctx.m1].predict(input_image_path)
+        track_result = ctx.tracker.update(det_m1)
+        det_dict = {ctx.m1: det_m1, "track": track_result}
+        result, bbox_groups = ctx.integrator(det_dict)
+        uncertainy: float = self.calc_jaccard(bbox_groups)
+        
+        if uncertainy <= ctx.thresholds.theta_track:
             ctx.transition(TwoState())
-            return ctx.state.exe_detection(ctx, frame_ref)
+            return ctx.state.exe_detection(ctx, input_image_path, det_m1=det_m1)
 
         return FrameResult(
-            detections=dets_m1,
+            detections=result,
             state=1,
             flops=FLOPs_Dict[ctx.m1],
         )
@@ -110,10 +113,13 @@ class TwoState(AdrodState):
             flops=FLOPs_Dict[ctx.m1] + FLOPs_Dict[ctx.m2],
         )
     
-    def exe_detection(self, ctx: StateContext, frame_ref: Any) -> FrameResult:
+    def exe_detection(self, ctx: StateContext, input_image_path, det_m1=None) -> FrameResult:
+        if not det_m1:
+            det_m1 = ctx.models[ctx.m1].predict(input_image_path)
+        det_m2 = ctx.models[ctx.m2].predict(input_image_path)
         dets = {
-            ctx.m1: ctx.detect(ctx.m1, frame_ref),
-            ctx.m2: ctx.detect(ctx.m2, frame_ref),
+            ctx.m1: det_m1,
+            ctx.m2: det_m2,
         }
         result, bbox_groups = ctx.integrator(dets)
         jaccard = self.calc_jaccard(bbox_groups)
@@ -122,7 +128,7 @@ class TwoState(AdrodState):
             ctx.transition(SingleState())
         elif jaccard <= ctx.thresholds.theta_low:
             ctx.transition(ThreeState())
-            return ctx.state.exe_detection(ctx, frame_ref)
+            return ctx.state.exe_detection(ctx, input_image_path, det_m1, det_m2)
 
         return FrameResult(
             detections=result,
@@ -153,11 +159,11 @@ class ThreeState(AdrodState):
             flops=FLOPs_Dict[ctx.m1] + FLOPs_Dict[ctx.m2],
         )
         
-    def exe_detection(self, ctx: StateContext, frame_ref: Any) -> FrameResult:
+    def exe_detection(self, ctx: StateContext, input_image_path, det_m1, det_m2) -> FrameResult:
         dets = {
-            ctx.m1: ctx.detect(ctx.m1, frame_ref),
-            ctx.m2: ctx.detect(ctx.m2, frame_ref),
-            ctx.m3: ctx.detect(ctx.m3, frame_ref),
+            ctx.m1: det_m1,
+            ctx.m2: det_m2,
+            ctx.m3: ctx.models[ctx.m3].predict(input_image_path)
         }
         result, _ = ctx.integrator(dets)
         ctx.transition(TwoState())

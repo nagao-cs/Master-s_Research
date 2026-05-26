@@ -58,7 +58,7 @@ class SingleState(AdrodState):
         result, bbox_groups = ctx.integrator(det_dict)
         uncertainy: float = self.calc_jaccard(bbox_groups)
         
-        if uncertainy >= ctx.thresholds.theta_track:
+        if uncertainy <= ctx.thresholds.theta_track:
             ctx.transition(TwoState())
             return ctx.state.process_cache(ctx, frame)
 

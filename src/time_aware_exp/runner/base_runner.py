@@ -1,24 +1,24 @@
 import os
 import time
-from pathlib import Path
+from pathlib                    import Path
 
-from ..config.config import AdrodConfig
-from ..state.stateContext import StateContext
-from ..executionRecorder import ExecutionRecorder
-from ..data.dataset import BaseDataset          # 追加
-from src.file_lib.file_writer import FileWriter
-from src.eval_lib.evaluator import Evaluator
+from ..config.config            import AdrodConfig
+from ..state.stateContext       import StateContext
+from ..executionRecorder        import ExecutionRecorder
+from ..data.dataset             import BaseDataset
+from src.file_lib.file_writer   import FileWriter
+from src.eval_lib.evaluator     import Evaluator
 
 
 class BaseRunner:
     def __init__(self, cfg: AdrodConfig, base_dir: Path, cfg_path: Path):
-        self.cfg = cfg
+        self.cfg =      cfg
         self.base_dir = base_dir
         self.cfg_path = cfg_path
 
     def run(self):
-        self.dataset = self.build_dataset()
-        self.context = self.build_context()
+        self.dataset =  self.build_dataset()
+        self.context =  self.build_context()
         self.recorder = ExecutionRecorder()
 
         start = time.time()
@@ -55,13 +55,17 @@ class BaseRunner:
 
     def evaluate(self):
         output_dir = self.cfg_path.parent / "result"
+        
+        if self.cfg.dataset == "KITTI":
+            target_class_ids = [0, 2]
+        else :
+            target_class_ids = [0, 2, 9, 11]
 
         evaluator = Evaluator(iou_threshold=self.cfg.iou_threshold)
         result = evaluator.evaluate(
-            gt_dataset_dir=(
-                self.dataset.gt_dir
-            ),
+            gt_dataset_dir=self.dataset.gt_dir,
             detection_dataset_dir=output_dir,
+            target_class_ids=target_class_ids
         )
 
         print(f"mAP       = {result.mAP}")

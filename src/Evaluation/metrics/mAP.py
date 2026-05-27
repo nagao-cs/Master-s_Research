@@ -52,6 +52,9 @@ def computeAP(targetClassId: int, targetBoundingBoxList: list[ClassifiedBounding
         numTruePositiveList.append(numTruePositive)
         numFalsePositiveList.append(numFalsePositive)
 
+    if not np.any(numGroundTruthBoundingBox > 0):
+        return -1.0
+    
     numTruePositiveList = np.array(numTruePositiveList, dtype=np.float32)
     numFalsePositiveList = np.array(numFalsePositiveList, dtype=np.float32)
 
@@ -102,7 +105,9 @@ def computeMeanAP(classifiedBoundingBoxList: list[ClassifiedBoundingBox], target
         targetClassIdAp: float = computeAP(
             targetClassId, targetClassIdBoundingBoxList)
         classIdApDict[targetClassId] = targetClassIdAp
+    
+    valid_ap_values = list(ap for ap in classIdApDict.values() if ap > 0 )
 
-    mAP: float = sum(classIdApDict.values()) / len(targetClassIdList)
+    mAP: float = sum(valid_ap_values) / len(valid_ap_values)
 
     return mAP, classIdApDict

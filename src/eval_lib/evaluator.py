@@ -19,11 +19,9 @@ class Evaluator:
         target_class_ids: list[int] = None
     ) -> EvaluationResult:
         """
-        地面真実と検出結果を評価する
-        
         Args:
-            gt_dataset_dir: 地面真実ラベルディレクトリ
-            detection_dataset_dir: 検出結果ディレクトリ
+            gt_dataset_dir
+            detection_dataset_dir
             target_class_ids: 評価対象のクラスID（デフォルト: [0, 2, 9, 11]）
         
         Returns:

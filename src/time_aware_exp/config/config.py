@@ -10,9 +10,10 @@ from pathlib import Path
 
 @dataclass
 class ThresholdConfig:
-    theta_high: float   # Jaccard係数がこれ以上でPAIR→SOLO
-    theta_low:  float   # Jaccard係数がこれ未満でPAIR→ENSEMBLE
-    theta_track: float  # トラッキング不確実性がこれ以上でSOLO→PAIR
+    theta_high: float   # Jaccard係数がこれ以上でTwo→Single
+    theta_low:  float   # Jaccard係数がこれ未満でTwo→Three
+    theta_track: float  # トラッキング不確実性がこれ以上でSingle→Two
+    # tau_p: float        # conf_baseの採用閾値
 
 
 @dataclass
@@ -24,7 +25,7 @@ class SortConfig:
 
 @dataclass
 class AdrodConfig:
-    map:           str
+    dataset:       str
     integrate_way: str
     model_1:       str
     model_2:       str
@@ -37,8 +38,9 @@ class AdrodConfig:
 def load_config(path: str | Path) -> AdrodConfig:
     with open(path) as f:
         d = yaml.safe_load(f)
+    print(d)
     return AdrodConfig(
-        map=d["map"],
+        dataset=d["dataset"],
         integrate_way=d["integrate_way"],
         model_1=d["model_1"],
         model_2=d["model_2"],

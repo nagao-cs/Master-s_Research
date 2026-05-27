@@ -37,7 +37,7 @@ def main():
         / "src"
         / "time_aware_exp"
         / "config"
-        / "default"
+        / "test"
         / "default.yaml"
     )
 

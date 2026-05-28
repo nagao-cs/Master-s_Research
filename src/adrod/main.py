@@ -17,6 +17,7 @@ from src.Evaluation.dataset import fileReader
 from src.file_lib.file_writer import FileWriter
 from .executionRecorder import ExecutionRecorder
 from src.ObjectDetection.models.FLOPsDict import FLOPs_Dict
+from src.eval_lib.evaluator import Evaluator
 
 class AdrodConfig(BaseModel):
     map: str
@@ -97,8 +98,7 @@ if __name__ == "__main__":
     # -----------
     # 出力ディレクトリ
     # -----------
-    outputLabelDir: Path = base_dir / "adaptiveDetectionResult" / "escalation" / "labels" / \
-        f"{config.map}" / f"{'_'.join(model_name_list)}" / f"{config.integrate_way}"
+    outputLabelDir: Path = yaml_path.parent / "result"
     os.makedirs(outputLabelDir, exist_ok=True)
 
     # ----------
@@ -140,10 +140,18 @@ if __name__ == "__main__":
     # 結果を保存
     file_writer: FileWriter = FileWriter(output_dir=outputLabelDir)
     for idx, detections in enumerate(execution_recorder.get_detections()):
-        output_path = outputLabelDir / f"{idx:06d}.txt"
-        file_writer.write(file_name=f"{idx:06d}", detection_list=detections)
+        file_writer.write(file_name=f"{idx:06d}.txt", detections=detections)
 
     # 統計情報の出力
     stats = execution_recorder.get_statistics()
     print(f"\nLevel distribution: {dict(stats["state_distribution"])}")
     print(f"総計算量: {stats["total_flops"]} GFLPs, {stats["flops_cost"]} cost")
+    
+    evaluator = Evaluator(iou_threshold=config.iou_threshold)
+    result = evaluator.evaluate(
+        gt_dataset_dir=base_dir / "output" / "label" / f"{config.map}" / "front",
+        detection_dataset_dir=outputLabelDir
+    )
+
+    print(f"mAP = {result.mAP}\nAP = {result.class_ap_dict}\n")
+    print(f"f1: {result.f1_score}, precision: {result.precision}, recall: {result.recall}")

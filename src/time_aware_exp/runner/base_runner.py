@@ -1,6 +1,7 @@
 import os
 import time
 from pathlib                    import Path
+import matplotlib.pyplot as plt
 
 from ..config.config            import AdrodConfig
 from ..state.stateContext       import StateContext
@@ -41,15 +42,19 @@ class BaseRunner:
         context: StateContext = build_context(self.cfg)
         return context
 
-    def save_result(self, recorder):
+    def save_result(self, recorder: ExecutionRecorder):
         output_dir = self.cfg_path.parent / "result"
+        fig_dir = output_dir / "figure"
         os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(fig_dir, exist_ok=True)
 
         writer = FileWriter(output_dir=output_dir)
         for idx, dets in enumerate(recorder.get_detections()):
             writer.write(file_name=f"{idx:06d}.txt", detections=dets)
 
         stats = recorder.get_statistics()
+        state_transition_graph = recorder.draw_state_transition_graph()
+        state_transition_graph.savefig(fig_dir / "state_transition.png", dpi=300, bbox_inches='tight')
         print(f"State distribution : {stats['state_distribution']}")
         print(f"Cost               : {stats['flops_cost']:.2f}x YOLOv8n")
 

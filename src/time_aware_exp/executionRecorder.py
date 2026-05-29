@@ -4,6 +4,9 @@ executionRecorder.py
 State パターン適用後も FrameResult の構造が同じであれば変更不要。
 """
 from collections import Counter
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+import numpy as np
 
 from src.boundingBox.boundingBox import DetectionBoundingBox
 from .state.AdrodState import AdrodState, FrameResult
@@ -22,6 +25,26 @@ class ExecutionRecorder:
         self.detection_record.append(frame_result.detections)
         self.exe_state_record.append(frame_result.state)
         self.total_flops += frame_result.flops
+    
+    def draw_state_transition_graph(self) -> Figure:
+        num_frame = len(self.exe_state_record)
+        x = np.arange(start=1, step=1, stop=num_frame+1)
+        y = self.exe_state_record
+        
+        # 1. 新しいFigure（描画領域）を作成
+        fig = plt.figure()
+        ax = plt.axes()
+        
+        # 2. plt.step を使って階段状に描画
+        ax.step(x, y, where='post')
+        
+        # 見やすさのための装飾（必要に応じて変更してください）
+        ax.set_xlabel('Frame')
+        ax.set_ylabel('State')
+        ax.grid(True, linestyle='--')
+        
+        # 3. 完成した Figure オブジェクトを返す
+        return fig
 
     def get_detections(self) -> list[list[DetectionBoundingBox]]:
         return self.detection_record

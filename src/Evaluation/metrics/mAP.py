@@ -58,8 +58,11 @@ def computeAP(targetClassId: int, targetBoundingBoxList: list[ClassifiedBounding
     numTruePositiveList = np.array(numTruePositiveList, dtype=np.float32)
     numFalsePositiveList = np.array(numFalsePositiveList, dtype=np.float32)
 
-    precisionList: np.array[np.float32] = numTruePositiveList / \
-        (numTruePositiveList + numFalsePositiveList)
+    total_detection_list = numTruePositiveList + numFalsePositiveList
+    if np.any(total_detection_list > 0):
+        precisionList = numTruePositiveList / total_detection_list
+    else:
+        precisionList = np.zeros(shape=len(total_detection_list))
     recallList: np.array[np.float32] = numTruePositiveList / \
         numGroundTruthBoundingBox
 

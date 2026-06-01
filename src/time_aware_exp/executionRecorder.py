@@ -3,6 +3,8 @@ executionRecorder.py
 フレーム処理結果を集約・記録する。
 State パターン適用後も FrameResult の構造が同じであれば変更不要。
 """
+import time
+
 from collections import Counter
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -20,6 +22,8 @@ class ExecutionRecorder:
         self.exe_state_record:  list[AdrodState] = []
         self.total_flops:       float = 0.0
         self.yolov8n_cost:      float = 17400.0
+        self.start = 0.0
+        self.end = 0.0
 
     def record_frame_result(self, frame_result: FrameResult) -> None:
         self.detection_record.append(frame_result.detections)
@@ -38,9 +42,9 @@ class ExecutionRecorder:
         # 2. plt.step を使って階段状に描画
         ax.step(x, y, where='post')
         
-        # 見やすさのための装飾（必要に応じて変更してください）
         ax.set_xlabel('Frame')
         ax.set_ylabel('State')
+        ax.set_yticks([0, 1, 2, 3])
         ax.grid(True, linestyle='--')
         
         # 3. 完成した Figure オブジェクトを返す
@@ -64,6 +68,15 @@ class ExecutionRecorder:
             "flops_cost":         self.total_flops / self.yolov8n_cost,
         }
 
+    def set_start_time(self):
+        self.start = time.time()
+    
+    def set_end_time(self):
+        self.end = time.time()
+    
+    def get_execution_time(self):
+        return self.end - self.start
+    
     def reset(self) -> None:
         self.detection_record = []
         self.exe_state_record = []

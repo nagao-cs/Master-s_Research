@@ -1,0 +1,22 @@
+thresholds:
+  # 1 -> 2 version
+  theta_track: 0.5
+  
+  # 2 -> 1 or 3 version
+  theta_high: 0.8
+  theta_low: 0.5
+
+sort:
+  iou_threshold: 0.5   # マッチングのIoU閾値
+  max_age:       1     # 検出なしで生存させるフレーム数
+  min_hits:      1     # 確立済みトラックとみなす最低連続マッチ数
+
+dataset: "KITTI"
+map: "Town02"
+iou_threshold: 0.5
+integrate_way: "affirmative"
+
+model_1: "rtdetr"
+model_2: "ssd"
+model_3: "fastrcnn"
+max_version: 3

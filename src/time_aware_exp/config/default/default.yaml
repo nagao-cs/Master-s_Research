@@ -11,7 +11,7 @@ sort:
   max_age:       1     # 検出なしで生存させるフレーム数
   min_hits:      1     # 確立済みトラックとみなす最低連続マッチ数
 
-map: "Town02"
+dataset: "KITTI"
 iou_threshold: 0.5
 integrate_way: "affirmative"
 
@@ -19,3 +19,4 @@ model_1: "yolov8n"
 model_2: "ssd"
 model_3: "rtdetr"
 max_version: 3
+

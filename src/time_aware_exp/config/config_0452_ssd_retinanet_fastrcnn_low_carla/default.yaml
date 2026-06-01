@@ -1,0 +1,15 @@
+thresholds:
+  theta_track: 0.3
+  theta_high: 0.7
+  theta_low: 0.3
+model_1: ssd
+model_2: retinanet
+model_3: fastrcnn
+dataset: CARLA
+sort:
+  iou_threshold: 0.5
+  max_age: 1
+  min_hits: 1
+iou_threshold: 0.5
+integrate_way: affirmative
+max_version: 3

@@ -31,6 +31,7 @@ class AdrodConfig:
     model_2:       str
     model_3:       str
     iou_threshold: int
+    max_version:   int
     thresholds:    ThresholdConfig
     sort:          SortConfig
 
@@ -46,6 +47,7 @@ def load_config(path: str | Path) -> AdrodConfig:
         model_2=d["model_2"],
         model_3=d["model_3"],
         iou_threshold=d["iou_threshold"],
+        max_version=d["max_version"],
         thresholds=ThresholdConfig(**d["thresholds"]),
         sort=SortConfig(**d["sort"]),
     )

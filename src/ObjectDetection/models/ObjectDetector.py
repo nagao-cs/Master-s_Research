@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Optional
 
 from src.boundingBox.boundingBox import DetectionBoundingBox
-from ..metrics import MetricsCollector, PerformanceMetrics
 
 class BBoxFormat(Enum):
     """バウンディングボックスの座標形式"""
@@ -17,6 +16,9 @@ class BBoxFormat(Enum):
     XYWH = "xywh"              # [x_center, y_center, width, height] (ピクセル)
     XYWH_NORM = "xywh_norm"    # [x_center, y_center, width, height] (正規化 0-1)
 
+class THRESHOLD:
+    CONFIDENCE_THRESHOLD = 0.25
+    SIZE_THRESHOLD = 0
 
 @dataclass
 class RawDetection:
@@ -33,7 +35,6 @@ class Detector:
     def __init__(self, model):
         self._setup_device()
         self.load_model(model)
-        self.metrics_collector = MetricsCollector(device=self.device)
 
     @abstractmethod
     def load_model(self, model):
@@ -157,39 +158,22 @@ class Detector:
     def _apply_masks_to_raw_detection(
         self,
         raw_detection: RawDetection,
-        confidence_threshold: Optional[float] = None,
-        target_classes: Optional[list[int]] = None,
-        size_threshold_pixel: Optional[float] = None
     ) -> RawDetection:
         """統一フォーマットにマスク適用"""
-        from ..utils import utils
-        
         # デフォルト値の取得
-        if confidence_threshold is None:
-            confidence_threshold = utils.CONF_THRESHOLD
-        if size_threshold_pixel is None:
-            size_threshold_pixel = utils.SIZE_THRESHOLD
-        
         bboxes = raw_detection.bboxes
         
         # 信頼度マスク
-        conf_mask = raw_detection.confidence_scores >= confidence_threshold
-        
-        # クラスマスク
-        if target_classes is None:
-            class_mask = torch.ones(len(raw_detection.class_ids), dtype=torch.bool, device=raw_detection.device)
-        else:
-            target_tensor = torch.tensor(target_classes, device=raw_detection.device)
-            class_mask = torch.isin(raw_detection.class_ids, target_tensor)
+        conf_mask = raw_detection.confidence_scores >= THRESHOLD.CONFIDENCE_THRESHOLD
         
         # サイズマスク（正規化座標から計算）
         widths_pixel = bboxes[:, 2] * raw_detection.image_width
         heights_pixel = bboxes[:, 3] * raw_detection.image_height
         size_pixel = widths_pixel * heights_pixel
-        size_mask = size_pixel >= size_threshold_pixel
+        size_mask = size_pixel >= THRESHOLD.SIZE_THRESHOLD
         
         # 統合マスク
-        combined_mask = conf_mask & class_mask & size_mask
+        combined_mask = conf_mask & size_mask
         valid_indices = torch.where(combined_mask)[0]
         
         # マスク適用

@@ -5,8 +5,8 @@ import numpy as np
 from .ObjectDetector import Detector, BBoxFormat
 
 class Yolov5nDetector(Detector):
-    def load_model(self):
-        self.model = YOLO("yolov5n.pt")
+    def load_model(self, model):
+        self.model = YOLO(model)
 
     def _run_model(self, image: np.ndarray) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, BBoxFormat]:
         detectionResult = self.model.predict(

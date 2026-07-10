@@ -6,10 +6,12 @@ from .ObjectDetector import Detector, BBoxFormat
 
 
 class FcosDetector(Detector):
-    def load_model(self):
+    def load_model(self, model):
         try:
-            weights = FCOS_ResNet50_FPN_Weights.COCO_V1
-            self.model = fcos_resnet50_fpn(weights=weights)
+            self.model = model
+            print(self.model.score_thresh)
+            print(self.model.nms_thresh)
+            print(self.model.detections_per_img)
             self.model.to(self.device)
             self.model.eval()
             print(f"PyTorch FCOS model loaded on {self.device}")

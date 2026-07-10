@@ -5,10 +5,11 @@ import torch
 from torchvision.transforms import functional as F    
 import numpy as np
 import cv2
+from pathlib import Path
+from typing import Optional
 
 from src.boundingBox.boundingBox import DetectionBoundingBox
 from ..metrics import MetricsCollector, PerformanceMetrics
-
 
 class BBoxFormat(Enum):
     """バウンディングボックスの座標形式"""
@@ -29,13 +30,13 @@ class RawDetection:
 
 
 class Detector:
-    def __init__(self):
+    def __init__(self, model):
         self._setup_device()
-        self.load_model()
+        self.load_model(model)
         self.metrics_collector = MetricsCollector(device=self.device)
 
     @abstractmethod
-    def load_model(self):
+    def load_model(self, model):
         """モデルをロード"""
         pass
 
@@ -54,7 +55,7 @@ class Detector:
         """クラスID調整オフセット（0-indexed vs 1-indexed の差分）"""
         pass
     
-    def predict(self, image_path: str) -> list[DetectionBoundingBox]:
+    def predict(self, image_path: Path) -> list[DetectionBoundingBox]:
         """5ステップの統一検出パイプライン"""
         # ステップ1: 検出の実行
         image, image_height, image_width = self._read_image(image_path)
@@ -75,50 +76,6 @@ class Detector:
         
         final_bbox_list: list[DetectionBoundingBox] = self._raw_detection_to_bbox_list(filtered, self._get_class_id_offset())
         return final_bbox_list
-
-    def predict_with_metrics(self, image_path: str) -> tuple[list[DetectionBoundingBox], PerformanceMetrics]: 
-        """5ステップの統一検出パイプライン"""
-        # ステップ1: 検出の実行
-        image, image_height, image_width = self._read_image(image_path)
-        # bboxes, confidence_scores, class_ids, bbox_format = self._run_model(image)
-        (bboxes, confidence_scores, class_ids, bbox_format), metrics = self._run_model_with_metrics(
-            image, image_height, image_width
-        )
-        
-        # ステップ2: 共通形式に変換
-        raw_detection = self._to_raw_detection(
-            bboxes, confidence_scores, class_ids,
-            image_height, image_width, bbox_format
-        )
-        
-        # ステップ3: マスク適用
-        filtered = self._apply_masks_to_raw_detection(raw_detection)
-        
-        # ステップ5: 最終的な結果の生成
-        if len(filtered.bboxes) == 0:
-            return [], metrics
-        
-        final_bbox_list: list[DetectionBoundingBox] = self._raw_detection_to_bbox_list(filtered, self._get_class_id_offset())
-        return final_bbox_list, metrics
-
-    def _run_model_with_metrics(
-        self,
-        image: np.ndarray,
-        image_height: int,
-        image_width: int
-    ) -> tuple:
-        """モデル推論をメトリクス計測付きで実行"""
-        # フレームワーク固有の推論を実行
-        model_output, metrics = self.metrics_collector.measure_inference(
-            self._run_model,
-            image,
-            image_height,
-            image_width,
-            compute_flops=True,
-            flops_inputs=self._get_flops_input_tensor(image)
-        )
-        
-        return model_output, metrics
     
     def _setup_device(self) -> None:
         """デバイス（GPU/CPU）をセットアップ"""
@@ -129,9 +86,9 @@ class Detector:
         
     # ========== 共通の画像処理 ==========
     
-    def _read_image(self, image_path: str) -> tuple[np.ndarray, int, int]:
+    def _read_image(self, image_path: Path) -> tuple[np.ndarray, int, int]:
         """画像を読み込んでサイズ情報を取得"""
-        image = cv2.imread(image_path)
+        image = cv2.imread(str(image_path))
         if image is None:
             raise FileNotFoundError(f"Image not found: {image_path}")
         
@@ -200,9 +157,9 @@ class Detector:
     def _apply_masks_to_raw_detection(
         self,
         raw_detection: RawDetection,
-        confidence_threshold: float = None,
-        target_classes: list[int] = None,
-        size_threshold_pixel: float = None
+        confidence_threshold: Optional[float] = None,
+        target_classes: Optional[list[int]] = None,
+        size_threshold_pixel: Optional[float] = None
     ) -> RawDetection:
         """統一フォーマットにマスク適用"""
         from ..utils import utils

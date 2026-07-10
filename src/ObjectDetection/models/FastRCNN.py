@@ -6,16 +6,15 @@ from .ObjectDetector import Detector, BBoxFormat
 
 
 class FasterRCNNDetector(Detector):
-
-    def load_model(self):
+    def load_model(self, model):
         try:
-            weights = FasterRCNN_ResNet50_FPN_V2_Weights.COCO_V1
-            self.model = fasterrcnn_resnet50_fpn_v2(weights=weights)
+            self.model = model
             self.model.to(self.device)
             self.model.eval()
             print(f"PyTorch FasterRCNN model loaded on {self.device}")
         except Exception as e:
             raise RuntimeError(f"Error loading FasterRCNN model: {e}")
+
 
     def _run_model(self, image: np.ndarray) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, BBoxFormat]:
         imageTensor = self._convert_to_rgb_tensor(image)

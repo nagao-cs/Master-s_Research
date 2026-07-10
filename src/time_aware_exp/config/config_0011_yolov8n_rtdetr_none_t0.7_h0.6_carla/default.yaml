@@ -1,0 +1,15 @@
+thresholds:
+  theta_track: 0.7
+  theta_high: 0.6
+  theta_low: 0.0
+model_1: yolov8n
+model_2: rtdetr
+model_3: none
+dataset: CARLA
+sort:
+  iou_threshold: 0.5
+  max_age: 1
+  min_hits: 1
+iou_threshold: 0.5
+integrate_way: affirmative
+max_version: 2

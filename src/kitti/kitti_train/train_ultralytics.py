@@ -11,6 +11,8 @@ def build_model(model_name):
         return YOLO("yolov8n.pt")
     elif model_name == "rtdetr":
         return RTDETR("rtdetr-l.pt")
+    else :
+        raise ValueError(f"invalid model name: {model_name}")
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(

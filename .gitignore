@@ -78,14 +78,9 @@ __pycache__/
 # -----------
 # その他
 # -----------
-/src/ObjectDetection/yolov8n.pt
-/src/ObjectDetection/requirement.txt
 /README
 /進捗報告
 /Evaluation/*.pkl
 /COCO_exp
 /test
-
-
-
-
+/src/adrod

@@ -5,12 +5,26 @@ from pathlib import Path
 import os
 import argparse
 import cv2
+import csv
+from datetime import datetime
 
 from src.boundingBox.boundingBox import DetectionBoundingBox
+from src.eval_lib.evaluator import Evaluator
+from .models.factory import build_model
+from ..config import DATASET_DIR
+
+def get_ground_truth_dir(dataset: str, mapName: str) -> Path:
+    """データセットに応じてGround Truthディレクトリを取得"""
+    if dataset == "KITTI":
+        return Path("/mnt/d/kitti/tracking/labels/0020")
+    elif dataset == "CARLA":
+        return Path(f"mnt/c/output/label/{mapName}/front")
+    else:
+        raise ValueError(f"Unknown dataset: {dataset}")
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(
-        description="one version Object Detection"
+        description="One version Object Detection"
     )
     argparser.add_argument(
         "--model",
@@ -20,8 +34,13 @@ if __name__ == "__main__":
     argparser.add_argument(
         "--map",
         type=str,
-        choices=["Town01", "Town02", "Town03", "Town04", "Town05", "Town10HD"],
         help="Map name: Town01, Town02, etc.",
+        default="Town02"
+    )
+    argparser.add_argument(
+        "--dataset",
+        type=str,
+        choices=["CARLA", "KITTI"],
         required=True
     )
 
@@ -30,95 +49,59 @@ if __name__ == "__main__":
 
     modelName: str = args.model
     mapName: str = args.map
+    dataset: str = args.dataset
 
-    if modelName == "yolov8n":
-        from src.ObjectDetection.models.Yolov8n import Yolov8nDetector
-        model = Yolov8nDetector()
-    elif modelName == "yolov11n":
-        from src.ObjectDetection.models.Yolov11n import Yolov11nDetector
-        model = Yolov11nDetector()
-    elif modelName == "yolov5n":
-        from src.ObjectDetection.models.Yolov5n import Yolov5nDetector
-        model = Yolov5nDetector()
-    elif modelName == "yolov26x":
-        from src.ObjectDetection.models.Yolo26x import Yolov26xDetector
-        model = Yolov26xDetector()
-    elif modelName == "rtdetr":
-        from src.ObjectDetection.models.rtDETR import RTDETRDetector
-        model = RTDETRDetector()
-    elif modelName == 'yolov8l':
-        from src.ObjectDetection.models.yolov8l import Yolov8lDetector
-        model = Yolov8lDetector()
-    elif modelName == "ssd":
-        from src.ObjectDetection.models.SSD_torch import SSDDetector
-        model = SSDDetector()
-    elif modelName == "fastrcnn":
-        from src.ObjectDetection.models.FastRCNN import FasterRCNNDetector
-        model = FasterRCNNDetector()
-    elif modelName == "fcos":
-        from src.ObjectDetection.models.FCOS import FcosDetector
-        model = FcosDetector()
-    elif modelName == "retinanet":
-        from src.ObjectDetection.models.retinanet import RetinanetDetector
-        model = RetinanetDetector()
-    elif modelName == "trainYolo":
-        from src.ObjectDetection.models.trainedYolov8n import Yolov8nTrainedDetector
-        model = Yolov8nTrainedDetector()
-    else:
-        raise ValueError(
-            f"モデル '{modelName}' はサポートされていません。\n"
-        )
+    model = build_model(model_name=modelName, dataset=dataset, device='cuda')
 
-    cwd: Path = Path(__file__).parent
-    baseDir: Path = cwd.parent.parent  # WindowsNoEditor
-
-    inputImageDir: Path = baseDir / "output" / "image" / \
-        f"{mapName}" / "original" / "front"
-    # dataset_dir: Path = baseDir / "GroundTruthDataset"
-    # inputImageDir: Path = dataset_dir / "images" / "front"
+    if dataset == "KITTI":
+        input_image_dir = Path(f"/mnt/d/kitti/tracking/images/{args.map}")
+    elif dataset == "CARLA":
+        input_image_dir =  Path(f"mnt/c/output/image/{mapName}/original/front")
 
     outputDetectionList: list[list[DetectionBoundingBox]] = list()
 
-    print("map: ", mapName)
-    print("model: ", model)
+    print(f"Dataset: {dataset}")
+    print(f"Map: {mapName}")
+    print(f"Model: {modelName}")
 
     logger = getLogger('ultralytics')
     logger.disabled = True
 
-    if not os.path.exists(inputImageDir):
+    if not os.path.exists(input_image_dir):
         raise FileNotFoundError(
-            f"Input directory does not exist: {inputImageDir},\n execution file is {Path(__file__)}")
+            f"Input directory does not exist: {input_image_dir},\n execution file is {Path(__file__)}")
 
-    inputImagePathList: list[Path] = [
-        inputImageDir / inputImageFile for inputImageFile in os.listdir(inputImageDir)]
+    input_image_path_list: list[Path] = sorted(
+        [input_image_path for input_image_path in input_image_dir.iterdir() if input_image_path.is_file()]
+    )
 
     # 計測開始
     start: float = time.time()
-    for inputImagePath in tqdm(inputImagePathList):
-        if not os.path.exists(inputImagePath):
-            raise FileNotFoundError(f"{inputImagePath} does not exist")
+    for input_image_path in tqdm(input_image_path_list, desc="[detection]"):
+        if not os.path.exists(input_image_path):
+            raise FileNotFoundError(f"{input_image_path} does not exist")
 
-        finalDetections = model.predict(image_path=inputImagePath)
+        finalDetections = model.predict(image_path=input_image_path)
         outputDetectionList.append(finalDetections)
 
     # 計測終了
     end: float = time.time()
     executionTime: float = end - start
-    print(f"total object detection time: {end - start:.2f} seconds")
+    print(f"\nTotal object detection time: {executionTime:.2f} seconds")
 
-    outputLabelDir: Path = baseDir / "oneVersionDetectionResult" / "labels" / \
-        f"{mapName}" / f"{modelName}"
-    outputImageDir: Path = baseDir / "oneVersionDetectionResult" / "debugImages" / \
-        f"{mapName}" / f"{modelName}"
+    outputLabelDir = DATASET_DIR / f"single_model_detection/{dataset}/labels/{mapName}/{modelName}"
+    outputImageDir = DATASET_DIR / f"single_model_detection/{dataset}/images/{mapName}/{modelName}"
     os.makedirs(outputLabelDir, exist_ok=True)
     os.makedirs(outputImageDir, exist_ok=True)
 
     index: int = 0
-    for inputImagePath, outputLabelList in tqdm(zip(inputImagePathList, outputDetectionList), desc="[result save]", total=len(outputDetectionList)):
+    for inputImagePath, outputLabelList in tqdm(zip(input_image_path_list, outputDetectionList), desc="[result save]", total=len(outputDetectionList)):
         outputImagePath: Path = outputImageDir / f"{index:06}.png"
         outputLabelPath: Path = outputLabelDir / f"{index:06}.txt"
 
-        outputImage = cv2.imread(inputImagePath)
+        outputImage = cv2.imread(str(inputImagePath))
+        if outputImage is None:
+            raise FileNotFoundError(f"Could not read image: {inputImagePath}")
 
         with open(outputLabelPath, 'w') as outputFile:
             for boundingBox in outputLabelList:
@@ -132,5 +115,85 @@ if __name__ == "__main__":
                 confidenceScore = boundingBox.confidenceScore
                 outputFile.write(
                     f"{classId} {xCenter} {yCenter} {width} {height} {confidenceScore}\n")
-        cv2.imwrite(outputImagePath, outputImage)
+        cv2.imwrite(filename=str(outputImagePath), img=outputImage)
         index += 1
+
+    print(f"✓ Results saved to: {outputLabelDir}")
+
+    # -----------
+    # 評価を実行
+    # -----------
+    print("\nEvaluating detections...")
+    try:
+        ground_truth_dir = get_ground_truth_dir(dataset, mapName)
+        print(ground_truth_dir)
+        
+        if not ground_truth_dir.exists():
+            print(f"⚠ Ground truth directory not found: {ground_truth_dir}")
+            evaluation_result = None
+        else:
+            evaluator = Evaluator(iou_threshold=0.5)
+            evaluation_result = evaluator.evaluate(
+                gt_dataset_dir=ground_truth_dir,
+                detection_dataset_dir=outputLabelDir,
+            )
+            
+            print("\n" + "="*60)
+            print("EVALUATION RESULTS")
+            print("="*60)
+            print(f"mAP:       {evaluation_result.mAP:.4f}")
+            print(f"F1 Score:  {evaluation_result.f1_score:.4f}")
+            print(f"Precision: {evaluation_result.precision:.4f}")
+            print(f"Recall:    {evaluation_result.recall:.4f}")
+            print(f"Time:      {executionTime:.2f}s")
+            print("="*60 + "\n")
+    
+    except Exception as e:
+        print(f"⚠ Evaluation failed: {e}")
+        evaluation_result = None
+
+    # -----------
+    # 結果をCSVで保存
+    # -----------
+    csv_output_dir = DATASET_DIR / f"single_model_detection/{dataset}/eval_result"
+    os.makedirs(csv_output_dir, exist_ok=True)
+    
+    csv_path = csv_output_dir / "results.csv"
+    
+    # CSVファイルが存在しない場合はヘッダーを書き込む
+    file_exists = csv_path.exists()
+    
+    with open(csv_path, 'a', newline='') as csvfile:
+        fieldnames = ['timestamp', 'dataset', 'model', 'map', 
+                      'mAP', 'F1_Score', 'Precision', 'Recall', 'Execution_Time_s']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        
+        if not file_exists:
+            writer.writeheader()
+        
+        if evaluation_result:
+            writer.writerow({
+                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'dataset': dataset,
+                'model': modelName,
+                'map': mapName,
+                'mAP': f"{evaluation_result.mAP:.4f}",
+                'F1_Score': f"{evaluation_result.f1_score:.4f}",
+                'Precision': f"{evaluation_result.precision:.4f}",
+                'Recall': f"{evaluation_result.recall:.4f}",
+                'Execution_Time_s': f"{executionTime:.2f}"
+            })
+        else:
+            writer.writerow({
+                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'dataset': dataset,
+                'model': modelName,
+                'map': mapName,
+                'mAP': 'N/A',
+                'F1_Score': 'N/A',
+                'Precision': 'N/A',
+                'Recall': 'N/A',
+                'Execution_Time_s': f"{executionTime:.2f}"
+            })
+    
+    print(f"✓ Evaluation results saved to: {csv_path}")

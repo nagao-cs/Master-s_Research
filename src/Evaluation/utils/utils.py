@@ -1,8 +1,8 @@
-SIZE_THRESHOLD = 25*25  # バウンディングボックスの最小サイズ
-# SIZE_THRESHOLD = 25
+# SIZE_THRESHOLD = 25*25  # バウンディングボックスの最小サイズ
+SIZE_THRESHOLD = 40
 CONF_THRESHOLD = 0  # 信頼度の閾値
-IM_WIDTH = 800
-IM_HEIGHT = 600
+IM_WIDTH = 1242
+IM_HEIGHT = 375
 class_Map = {
     0: 0,  # pedestrian
     1: 2,  # bicycle

@@ -1,7 +1,7 @@
 from src.boundingBox.boundingBox import ClassifiedBoundingBox, ClassifyCategory
 
 
-def computeF1Score(classifiedBoundingBoxList: list[ClassifiedBoundingBox]) -> float:
+def computeF1Score(classifiedBoundingBoxList: list[ClassifiedBoundingBox]) -> tuple[float, float, float]:
     numTruePositive: int = 0
     numFalsePositive: int = 0
     numFalseNegative: int = 0

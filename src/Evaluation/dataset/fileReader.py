@@ -12,24 +12,26 @@ def convertGroundTruthFileToBoundingBoxList(groundTruthFilePath: str) -> list[Gr
                 continue
 
             boundingBoxComponentList = line.strip().split(' ')
-            classId = utils.class_Map.get(
-                (int(boundingBoxComponentList[0])), -1)  # -1（無視するクラス）
-            if classId == -1:
-                continue
-
+            classId = int(boundingBoxComponentList[0])
+            # classId = utils.class_Map.get(
+            #     (int(boundingBoxComponentList[0])), -1)  # -1（無視するクラス）
+            # if classId == -1:
+            #     continue
+            
             xCenter = float(boundingBoxComponentList[1])
             yCenter = float(boundingBoxComponentList[2])
             width = float(boundingBoxComponentList[3])
             height = float(boundingBoxComponentList[4])
             size = width * height * utils.IM_WIDTH * utils.IM_HEIGHT
-            if size < utils.SIZE_THRESHOLD:
-                continue
+            # if size < utils.SIZE_THRESHOLD:
+            #     continue
             # if ((width * utils.IM_WIDTH) < utils.SIZE_THRESHOLD) or ((height * utils.IM_HEIGHT) < utils.SIZE_THRESHOLD):
                 # continue
 
             groundTruthBoundingBox: GroundTruthBoundingBox = GroundTruthBoundingBox(
                 xCenter, yCenter, width, height, classId)
 
+            # print(xCenter, yCenter, width, height)
             groundTruthBoundingBoxList.append(groundTruthBoundingBox)
 
     return groundTruthBoundingBoxList
@@ -45,18 +47,19 @@ def convertDetectionFileToBoundingBoxList(detectionFilePath: str) -> list[Detect
                 continue
 
             boundingBoxComponentList = line.strip().split(' ')
-            classId = utils.class_Map.get(
-                (int(boundingBoxComponentList[0])), -1)  # -1（無視するクラス）
-            if classId == -1:
-                continue
+            classId = int(boundingBoxComponentList[0])
+            # classId = utils.class_Map.get(
+                # (int(boundingBoxComponentList[0])), -1)  # -1（無視するクラス）
+            # if classId == -1:
+                # continue
 
             xCenter = float(boundingBoxComponentList[1])
             yCenter = float(boundingBoxComponentList[2])
             width = float(boundingBoxComponentList[3])
             height = float(boundingBoxComponentList[4])
             size = width * height * utils.IM_WIDTH * utils.IM_HEIGHT
-            if size < utils.SIZE_THRESHOLD:
-                continue
+            # if size < utils.SIZE_THRESHOLD:
+            #     continue
             # if ((width * utils.IM_WIDTH) < utils.SIZE_THRESHOLD) or ((height * utils.IM_HEIGHT) < utils.SIZE_THRESHOLD):
             #     continue
 
@@ -64,6 +67,7 @@ def convertDetectionFileToBoundingBoxList(detectionFilePath: str) -> list[Detect
 
             detecionBoundingBox: DetectionBoundingBox = DetectionBoundingBox(
                 xCenter, yCenter, width, height, classId, confidenceScore)
+            # print(xCenter, yCenter, width, height)
 
             detectionBoundingBoxList.append(detecionBoundingBox)
 

@@ -285,6 +285,7 @@ def processImage(
         gtRoot, dataset, "tracking", mapName, "labels", f"{imageId}.txt"
     )
     groundTruthBoxes = loadGroundTruthFile(gtFilePath)
+    print(groundTruthBoxes)
 
     representativeBoxes = [computeRepresentativeBox(group) for group in groups]
     isTpFlags = matchGroupsToGroundTruth(
@@ -414,7 +415,7 @@ if __name__ == "__main__":
     out_dir = summary_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    per_model_csv = out_dir / f"{model_key}.csv"
+    per_model_csv = out_dir / f"{model_key}_{args.dataset}_{args.map}.csv"
     saveRecordsToCsv(records, str(per_model_csv))
 
     print(f"Summary appended: {summary_path}")

@@ -16,19 +16,21 @@ class Evaluator:
         self,
         gt_dataset_dir: Path,
         detection_dataset_dir: Path,
-        target_class_ids: list[int] = None
     ) -> EvaluationResult:
         """
         Args:
             gt_dataset_dir
             detection_dataset_dir
-            target_class_ids: 評価対象のクラスID（デフォルト: [0, 2, 9, 11]）
+            target_class_ids: 評価対象のクラスID
         
         Returns:
             EvaluationResult: 評価結果
         """
-        if target_class_ids is None:
-            target_class_ids = [0, 2, 9, 11]
+        target_class_ids = [i for i in range(13)]
+        
+        print(f"gt_dir: {gt_dataset_dir}")
+        print(f"det_dir: {detection_dataset_dir}")
+        print(f"target_class: {target_class_ids}")
         
         classified_boxes = self._classify_detections(
             gt_dataset_dir, detection_dataset_dir

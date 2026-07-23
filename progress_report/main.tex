@@ -1,0 +1,882 @@
+\documentclass[conference, dvipdfmx]{IEEEtran}
+\IEEEoverridecommandlockouts
+% The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+% \usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{url}
+\usepackage[dvipdfmx]{graphicx}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+% 日本語対応
+\usepackage{CJKutf8}
+
+\begin{document}
+\begin{CJK}{UTF8}{min}
+
+\title{自動運転における物体検出のための適応的冗長性}
+
+\author{\IEEEauthorblockN{Shunsuke Nagao}
+\IEEEauthorblockA{\textit{Department of Computer Science} \\
+\textit{University of Tsukuba}\\
+Tsukuba, Japan \\
+nagao.shunsuke@sd.cs.tsukuba.ac.jp}
+\and
+\IEEEauthorblockN{Fumio Machida}
+\IEEEauthorblockA{\textit{Department of Computer Science} \\
+\textit{University of Tsukuba}\\
+Tsukuba, Japan \\
+machida@cs.tsukuba.ac.jp}
+}
+
+\maketitle
+
+%
+%既存のものと比較するか、最適をどう探すかの手法も、可能性を絞り込む方法のガイド
+%2バージョンの状態からどうすれば最適な3バージョンに構成できるか(ISSREの方も含めて)
+%static が誤解を生むかも
+%結構コストは気にされるかも
+
+% 全体を見て研究のシナリオを考える（トラッキングにゴールを置く or 物体検出の精度向上）
+% 何をゴールに置くか
+% 精度とコストのトレードオフの最適地をどうとっていくく
+% もう少し強い主張ができる結果を出せると良い
+% クリティカルなシナリオに限定しても可
+% 良い見せ方を探してみると良いかも
+
+\begin{abstract}
+物体検出は自動運転システムにおけるリアルタイム環境認識に不可欠な要素である。
+自動運転における環境認識のエラーは深刻な結果をもたらす可能性があるため、推論エラーに耐性を持つ信頼性の高い物体検出システムのアーキテクチャが必要とされる。
+本論文では、リアルタイム物体検出システム向けの適応的冗長化技術を提案する。
+提案手法は、検出結果の不確実性に基づいて検出に用いるアクティブな検出モデル数を動的に調整することで、計算コストのオーバーヘッドを抑えながら検出エラーを削減することを目的としている。
+過去の検出結果や複数モデル間の検出の一致度スコアを利用することで、必要な場合にのみ冗長な検出モデルを起動する。
+CARLAとKITTIデータセットを用いて評価し、提案手法が静的な2バージョンシステムと比較して計算コストをを削減しつつ、mAPおよびF1スコアにおいてわずかな検出性能を低下に抑えられることを示した。
+提案手法は信頼性と計算効率のバランスを効果的に取り、自動運転のようなリアルタイム物体検出の実用的な実行手法となる。
+\end{abstract}
+
+\section{はじめに}\label{introduction}
+物体検出は自動運転、自律ロボット、医療画像診断など様々なアプリケーションをにおいて不可欠な技術である \cite{zou2023}\cite{LITJENS2017}\cite{Grigorescu2020}。
+近年、機械学習（ML）ベースの物体検出モデルはその優れた検出性能から広く活用されている。
+しかし、MLベースの検出モデルの性能は学習データセットの品質に大きく依存しており、常に完璧な検出を行えるわけではない。
+そのため、実世界の物体検出アプリケーションはMLベースの検出モデルによるエラーの影響を受けやすい。
+
+リアルタイム物体検出による信頼性の高い環境認識の確保は、自動運転システムにとって重要な要件である。
+アーキテクチャの冗長性は自動運転システムにおける環境認識の信頼性向上のために広く採用された手法である~\cite{SensorFailure2024}。
+信頼性の高い環境認識を実現するため、マルチモーダルセンサーフュージョンでは、カメラ・LiDAR・レーダーなど異なる特性とエラーを持つ異なるセンサーからの情報を統合する~\cite{Sensors2021}。
+相補的なセンサーを組み合わせることで、個々のセンサーエラーに対する堅牢性を向上させる~\cite{Huang2022}。
+特に、カメラとLiDARの組み合わせは相補的な特性を活用することで検出精度を向上させることが示されている~\cite{PointPainting2019}。
+マルチバージョンMLシステムは、複数の独立したMLモデルのインスタンスを使用して個々のエラーを補完し合う~\cite{Wen2025, Wen2024}。
+冗長化技術は検出エラーを低減できる一方で、組み込みシステムなどリソースが限られた環境では計算コストの増加が課題となることが多い。
+
+計算効率の高いMLシステムについて、これまでにいくつかの研究が発表されている。
+物体検出タスクでは、従来の手法は軽量モデルと重量モデルの切り替え~\cite{DynamicDet2023}やネットワークの深さの動的調整~\cite{sabet2021temporalearlyexitsefficient}など、特殊なアーキテクチャや追加の学習手続きに依存することが多い。
+画像分類においては、複数モデルによる計算コストを削減するため、アンサンブル計算を終了させるEarly Exit戦略が導入されている~\cite{Inoue2017}。
+複数の分類器間の一致度を適応的な推論終了の基準として使用する手法も提案されている~\cite{AgreementCascade2025}。
+しかし、これらの分類向けの手法は、1枚の画像に様々な位置やスケールの複数の物体が現れる物体検出タスクに直接適用することはできない。
+本研究の知る限り、計算効率の高いマルチバージョン物体検出システムのための適応的冗長アーキテクチャを提案するのは本研究が初めてである。
+
+これらの観察を動機として、本研究では実行時の検出結果の不確実性に基づいて検出に利用するアクティブなモデル数を動的に調整する物体検出システムの適応的冗長アーキテクチャを提案する。
+提案手法は過去の検出結果や複数モデル間の検出結果の一致度から、適切な冗長性レベルを決定する。
+提案手法では1バージョンと2バージョンの2つの状態を持つ。
+この状態間の遷移は過去の検出結果や複数モデル間の検出結果の一致度から決定される。
+過去の検出結果と一致しない場合は誤検出もしくは検出漏れがある可能性があり、不確実性が高いため追加のモデルを起動する。
+アクティブなモデル間で検出結果が一致している場合、冗長な検出が効果的でないと考えられるため、システムは計算コスト削減のためにアクティブなモデル数を削減する。
+この適応的な制御により、システムは高い信頼性と低い計算コストを同時に達成する。
+
+CARLAシミュレータで収集したデータセットとKITTIのTrackingデータセットを使用し、多様な環境条件下での連続した走行シーンで構成される自動運転シナリオで提案手法を評価した。
+比較のため、単一モデルのみを使用する1バージョンシステムと、常に2つのモデルを実行してその出力を統合する静的2バージョン冗長システムの2つの静的ベースラインを検討した。
+結果は、提案手法が2バージョン冗長システムと比較して計算コストを削減しつつ、同等の検出性能を維持することを示した。
+
+% 本論文の主な貢献は以下の通りである。
+
+% \begin{itemize}
+%     \item 既存の物体検出モデルの出力のみに基づいてアクティブなモデル数を動的に調整する、物体検出のための適応的冗長化技術AdRODを提案する。
+%     \item 信頼性と計算コストのバランスをとるための確信度閾値や一致度閾値などの主要パラメータの設定に関する実証的分析を提供する。
+%     \item AdRODが静的冗長システムと比較して計算コストを77.8\%削減しつつ、mAPにおいて同等の検出性能を維持することを実証する。
+% \end{itemize}
+
+本論文の構成は以下の通りである。
+第~\ref{sec:related work}節では関連研究を述べる。
+第~\ref{sec:adrod}節では提案手法を紹介する。
+第~\ref{sec:experiment plan}節では実験設定を示す。
+第~\ref{sec: results and discussion}節では実験結果と考察を報告する。
+最後に、第~\ref{sec: conclusion}節で本論文をまとめ、今後の課題を述べる。
+
+\section{関連研究}
+\label{sec:related work}
+
+\subsection{アンサンブル手法}
+アンサンブル学習はMLモデルの性能を向上させるために複数のMLモデルを組み合わせる広く知られた手法であり~\cite{EnsembleSurvey2022}、バギング~\cite{Breiman1996}、ブースティング~\cite{Freund1997, Freund1996}、スタッキング~\cite{Wolpert1992}などの手法に代表される。
+学習時にモデルを組み合わせるのではなく、複数の推論を活用するシステムレベルのアーキテクチャとして、NバージョンMLシステムが信頼性の高いMLシステムとして採用されている~\cite{machida_diversities_of_2version, Machida2019}。
+物体検出タスクでは、Casado-Garc{\'\i}aらが複数の検出結果を単一の最終出力に集約する手法を提案している~\cite{CasadoGarcia2020}。
+これらの研究はMLモデル出力の信頼性と精度の向上に焦点を当てているが、計算コストの増加はリソースが限られた環境での実システム展開における根本的な制限である。
+この問題を克服するため、本研究では複数モデル推論の信頼性の利点を維持しながら計算オーバーヘッドを軽減する動的冗長化手法を提案する。
+
+\subsection{計算コスト削減手法}
+分類タスクにおけるマルチモデル推論の計算コストを削減するために、いくつかの手法が提案されている。
+Inoueらは、最も確率の高いラベルを確信を持って識別できる程度にsoftmax出力確率が十分高い場合にアンサンブル計算を終了するEarly Exit戦略を提案している~\cite{Inoue2017}。
+Ziyueらは、現在の予測が十分に確実でない場合に推論を終了するRNNベースのセレクターを導入している~\cite{Li2023}。
+Shamimaらは、主ブロック内の複数モデルの出力が一致しない場合にのみ重いトランスフォーマーモデルを呼び出すリカバリブロックアーキテクチャを提案している~\cite{Afrin2024}。
+しかし、これらの手法は分類タスク向けに設計されており、1枚の画像に様々な位置やスケールの複数の物体が現れる物体検出には直接適用できない。
+
+物体検出分野では、Linらが入力画像の検出難易度を推定し、それに応じてモデルの推論経路の深さを動的に調整する手法を提案している~\cite{DynamicDet2023}。
+Sabetらは前フレームと意味的な変化がないフレームの推論をスキップして過去の検出結果を再利用し、計算コストを削減する手法を提案している~\cite{sabet2021temporalearlyexitsefficient}。
+Hoffmannらは、検出可能な物体が少ない場面においてトラッキングベースのアプローチで複数の連続フレームを代替することで、処理時間を削減しながら検出性能を維持する手法を提案している~\cite{Hoffmann2021}。
+しかし、これらの手法は特殊なモデルアーキテクチャの設計・学習を必要とし、一度に単一モデルで推論を行うことを前提としている。
+これらの研究とは対照的に、本研究では総計算コストを削減するためにアクティブな検出器の数を調整する適応的手法を提案する。
+
+\subsection{Tracking}
+Visual Object Tracking(VOT）は，ビデオシーケンス内の特定ターゲットの状態変化を連続的に推定するタスクである~\cite{VOT_survey}。
+Multi-Object Tracking(MOT）は歩行者や車両など複数の同一カテゴリ対象を同時に検出・追跡し，各対象の個別 ID を維持するタスクであり，検出とデータ関連付けの統合が不可欠となる~\cite{MOT_review}。
+AlexNet~\cite{AlexNet}登場以降，トラッキングの主流はハンドクラフト特徴量から CNN を用いたエンドツーエンドの表現学習へと移行した。
+特にシャムネットワーク（Siamese Network）はトラッキングを類似度学習問題として再定義し，重みを共有する二つのバックボーンでテンプレートと探索領域を処理して，相互相関によってターゲット位置を特定するという枠組みを確立した~\cite{bertinetto2021fullyconvolutionalsiamesenetworksobject}。
+MOT において伝統的なアプローチは Tracking-by-Detectionであり，各フレームに物体検出器を適用して得られたバウンディングボックスをデータ関連付けアルゴリズムでリンクさせる~\cite{MOT_review}。
+Bewley ら~\cite{SORT}の SORT はカルマンフィルタによる運動予測とハンガリアン法による IoU ベースの関連付けを組み合わせ，高速なオンライン追跡を実現した。
+Wojke ら~\cite{DeepSort}の DeepSORT は CNN による外観埋め込みを統合して遮蔽後の同一性維持能力を向上させた。
+Zhang ら~\cite{ByteTrack}の ByteTrack は信頼度の低い検出ボックスを二段階の関連付けで活用することでオクルージョン時の軌道断片化を劇的に低減した。
+本研究ではトラッキング単体での使用やその精度向上ではなく、トラッキングにより過去のフレームでの検出結果を現在の検出の不確実性判定に用いる。
+本研究では可能な限り高速で動作することで余計な計算コストを発生させないことに重きをおき、SORTを採用した。
+
+\section{提案手法}
+\label{sec:adrod}
+本研究では、高い検出精度を低い冗長性のオーバーヘッドで達成するために、アクティブなモデル数を動的に調整する物体検出システムの適応的冗長アーキテクチャを提案する。
+提案手法は検出結果の不確実性に基づいて、単一の物体検出器と2バージョン検出システムを遷移する。
+単一検出器による検出結果の不確実性が低い場合、システムは計算コストを節約するためにsingle-version modeを維持する。
+検出結果の不確実性が閾値を超えた場合、2バージョンへとスケールする。
+提案手法では、冗長な検出モデルは不確実な状況でのみ使用されるため、全体的な計算オーバーヘッドが削減される。
+
+\subsection{バージョン遷移アルゴリズム}
+提案手法のバージョン決定の遷移を図~\ref{fig:version transition}に示す。
+システムは軽量な検出モデル$M_1$を使用するsingle-version modeから開始する。
+詳細を以下で説明する。
+
+\begin{figure*}[ht]
+    \centering
+    \includegraphics[width=0.9\linewidth]{images/version_transition.png}
+    \caption{提案手法のmode遷移の概要。システムはsingle-verion modeから推論を開始し、不確実性指標$J(D_{cur}, D_{prev})$が$\theta_{track}$を超えるとtwo-version modeへ遷移する。two-version modeからは、モデル間一致度$J(D_1, D_2)$が$\theta_{high}$を超えるとsingle-version modeに戻る。}
+    \label{fig:version transition}
+\end{figure*}
+
+\begin{enumerate}
+    \item \textbf{two-version modeへの遷移} \\
+    single-versionからtwo-version modeへの遷移を、過去のフレームでの検出結果との一致度から決定する。
+    現在よりも前のフレームでの検出結果から推定した現在のフレームでの物体の位置を$D_{est}$、また現在のフレームでの$M_1$による検出結果を$D_{cur}$とする。
+    この2つの結果間のJaccard係数により一致度スコアを決定する。
+    $$J(D_{cur}, D_{est}) = \frac{|D_{cur} \cap D_{est}|}{|D_{cur} \cup D_{est}|}$$
+    $J(D_{cur}, D_{est})$が不確実性閾値$\theta_{track}$を超えた場合、現在のフレームには前のフレームにはない物体がある、または過去のフレームにあった物体を見逃していることが想定できる。
+    このことからそのフレームには不確実な検出が含まれる可能性が高く、システムは追加検出モデル$M_2$を起動してtwo-version modeに遷移する。
+    \item \textbf{single-version modeへの遷移} \\
+    two-version modeからの遷移は、$M_1$と$M_2$の2つの独立した検出結果間のJaccard係数として定義される一致度スコアによって決定される：
+    $$J(D_1, D_2) = \frac{|D_1 \cap D_2|}{|D_1 \cup D_2|}$$
+    ここで$|D_1 \cap D_2|$は同じクラスラベルを持ち$\text{IoU} \geq 0.5$を満たす検出ペアの数、$|D_1 \cup D_2|$はいずれかの物体検出モデルが生成した異なる検出の総数($|D_1 \cup D_2| = |D_1| + |D_2| - |D_1 \cap D_2|$)を表す。
+    $J(D_1, D_2)$が閾値$\tau_{high}$より高い場合、2つのモデルはよく一致した結果を出力していると見なされ、計算コスト節約のためシステムはsingle-version modeに遷移する。
+\end{enumerate}
+
+\subsection{$D_{est}$の推定方法}
+過去のフレームの検出結果から現在のフレームでの物体の位置を推定するために、Bewleyらが提案したトラッキングアルゴリズムであるSORTを活用する \cite{SORT}。
+SORTは、バウンディングボックスの位置や大きさなどに対して、カルマンフィルターやハンガリアンアルゴリズムを組み合わせたアルゴリズムにより現在のフレームでの物体の位置を推定する。
+精度と速度の両面をリアルタイムという観点で実用可能なレベルで両立するモデルとして提案されており、260FPSで動作することが報告されるなど精度を保ちながらシステムの処理時間に対して十分実用的であると考えれられる。
+以下にSORTの処理を示す。
+\begin{enumerate}
+    \item 物体検出を実行する。トラッキングをするための基準となる物体を収集する。
+    トラッカーは、速度がゼロに設定されたバウンディングボックスの情報を使用して初期化する。
+    この時点では速度が観測されていないため、速度成分の共分散はこの不確実性を反映して大きな値で初期化する。 
+    \item 各物体の状態を中心のピクセル位置$(u,v)$、スケール（面積）$s$、アスペクト比 $r$、およびそれぞれの速度成分を用いてモデル化する。
+    フレーム間の物体の移動を等速運動モデルで近似する。
+    既存のトラッキングオブジェクトについては現在のフレームの検出結果と一致した場合、カルマンフィルタを使用して速度成分などの状態を最適に更新する。
+    どの検出結果とも一致しなかった場合は、修正を行わずに線形モデルによって状態を予測する。
+    \item 既存のトラッキングオブジェクトに現在のフレームで検出したオブジェクトを割り当てる。
+    既存のターゲットの移動先のバウンディングボックスの位置を予測し、「現在のフレームで検出されたバウンディングボックス」と、「既存のトラッキングオブジェクトの移動先の予測バウンディングボックス」との間のIoUを計算し、「割り当てコストマトリックス」を作成する。
+    割り当てを、ハンガリアンアルゴリズムを使用して最適に決定する。
+    \item オブジェクトが画像内を出入りするため、一意のIDを「作成」または「破棄」する。
+    トラックが$T_{Lost}$フレームで検出されない場合や画像の範囲外に移動した場合、トラッキングを終了する。
+    これにより、検出器からの修正なしで、長期間にわたる予測によって引き起こされるトラッカーの増加を抑制する。
+\end{enumerate}
+
+このようにして出力されたSORTでのトラッキングオブジェクトの集合を$D_{est}$として採用する。
+
+\subsection{出力決定手法}
+\label{integrate output}
+複数の物体検出結果から最終的な検出結果を出力するため、Casado-Garc\'iaら~\cite{CasadoGarcia2020}の手法を参照し、グルーピングと選択によって出力を決定する。
+まず、全アクティブモデルからの検出結果のうち、同じクラスラベルを持ち十分な重なる（IoU $\geq 0.5$）ものを共通の検出グループとする。
+次に、各検出グループは3つの統合手法（Affirmative、Consensusメソッド、Conf\_baseメソッド）のいずれかに従って採用または棄却される。
+
+\begin{enumerate}
+    \item Affirmativeメソッドは1つ以上のアクティブモデルが検出した場合に検出グループを採用する。
+    \item Conf\_baseメソッドは全検出器の確信度スコアの合計が閾値$\tau_p$以上の場合に採用する。
+    \item Consensusメソッドはアクティブモデルの過半数が検出した場合に採用する。
+    提案手法では最大three-version modeのため、このメソッドはthree-version modeでのみ選択肢となる。
+\end{enumerate}
+
+今回は最大2バージョンであることに加え、トラッキングの結果の確信度スコアの決定方法が不安定なためAffirmativeのみを使用している。
+採用されたグループについては、構成する検出のバウンディングボックス座標と確信度スコアを平均化して単一の統合検出を生成し、最終出力に追加する。
+
+\section{Tracking(SORT)の検証}
+ここでは、トラッキング手法として採用したSORTの有用性を検証する。
+検証として、SORTを実行した場合としない場合の処理速度、またSORTの検出性能をmAP,F1等で評価した。
+
+\subsubsection{実験概要}
+CARLAで作成したカスタムデータセット、またKTTTIが公開するトラッキング向けのデータセットを使用する。
+SORTでは、トラッキングのために物体検出モデルによる検出結果を必要とする。
+元論文 \cite{SORT}では使用するモデルの性能がトラッキングにも大きな影響を与えるとされているため、その検証も含めたようなモデルを使用した場合の性能を検証した。
+また、SORTは$max\_age$と$min\_hits$という2つの変数をもつ。
+$max\_age$は検出なしでもそのトラッキングを有効にするフレーム数の上限で、$max\_age$が大きくなるほどocculusionなどで検出できない場合でも追跡できる一方、余計な誤検出が長く影響する。
+$min\_hits$は対象bboxをトラッキングするまでに必要とする検出のフレーム数である。$min\_hits$が大きいほどトラッキングの開始が遅れるが、確実な物体のみをトラッキングするため誤った物体のトラッキングを防ぐことができる。
+これらの値は元論文に従い$max\_age=1$, $min\_hits=1$と設定した。
+検出モデル単体で処理を行った時の速度、SORTを使用した際の速度、またSORTの検出性能を比較する。
+
+\subsubsection{実験結果}
+
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{images/frame_000370.png}
+    \includegraphics[width=\linewidth]{images/frame_000371.png}
+    \caption{trackingの例(上->下でフレームが推移する}
+    \label{fig:combined_frames}
+\end{figure*}
+はじめに、トラッキングの実行例を図~\ref{fig:combined_frames}に示す。
+青のbboxが物体検出モデルの検出、赤がTrackinによるbboxである。
+SORTでは前のフレームから予測するため、実際の検出結果のbboxとは多少のずれがみられるが、大きくは正しくtrackingできていることがわかる。
+また、中央左の車のように一時的に物体検出モデルが見逃してしまう物体もtrackingによって補完できることも確認できた。
+
+\begin{table}[htbp]
+    \caption{SORTの処理速度}
+    \centering
+    \begin{tabular}{lc}
+        \hline
+                 & 速度(FPS) \\ \hline 
+         SORTあり &  18.87 \\
+         SORTなし &  18.95 \\
+         \hline
+    \end{tabular}
+    \label{tab:SORTの処理速度}
+\end{table}
+SORTを使用した場合としていない場合で処理速度にどの程度の差が出るのかを検証した。
+表~\ref{tab:SORTの処理速度}に検証結果を示す。
+本検証では、基準となる検出モデルにはYOLOv8nを使用し、データセットにはKITTIのmulti-object-trackingデータセットの0020を使用している。
+表~\ref{tab:SORTの処理速度}から、SORTを使用した場合の処理速度への影響は0.08 FPSにとどまることがわかる。元論文~\cite{SORT}ではSORTは260Hzで動作可能と述べられており、本実装では一部データ形式の変換が必要であるなど完全には最適化されていないものの、処理速度への影響は十分小さく実用的であると考えられる。
+
+\begin{table}[htbp]
+    \caption{SORTのトラッキング性能}
+    \centering
+    \begin{tabular}{llccccc}
+        \toprule
+        Dataset & 
+        model                         & sort       & mAP   & F1    & Precision & Recall \\
+        \midrule
+        \multirow{8}{*}{KITTI} 
+        & \multirow{2}{*}{YOLOv8n}    &            & 0.493 & 0.662 & 0.751     & 0.592 \\
+        &                             & \checkmark & 0.489 & 0.669 & 0.856     & 0.549 \\ 
+        & \multirow{2}{*}{SSD}        &            & 0.370 & 0.559 & 0.880     & 0.409 \\
+        &                             & \checkmark & 0.356 & 0.531 & 0.931     & 0.371 \\ 
+        & \multirow{2}{*}{RetinaNet}  &            & 0.382 & 0.459 & 0.325     & 0.779 \\
+        &                             & \checkmark & 0.418 & 0.526 & 0.411     & 0.730 \\ 
+        & \multirow{2}{*}{RTDETR}     &            & 0.470 & 0.570 & 0.461     & 0.748 \\
+        &                             & \checkmark & 0.496 & 0.617 & 0.548     & 0.706 \\
+        \midrule
+        \multirow{8}{*}{CARLA} 
+        & \multirow{2}{*}{YOLOv8n}    &            & 0.498 & 0.716 & 0.819     & 0.636 \\
+        &                             & \checkmark & 0.485 & 0.714 & 0.859     & 0.611 \\ 
+        & \multirow{2}{*}{SSD}        &            & 0.456 & 0.618 & 0.933     & 0.462 \\
+        &                             & \checkmark & 0.441 & 0.605 & 0.952     & 0.443 \\ 
+        & \multirow{2}{*}{RetinaNet}  &            & 0.396 & 0.513 & 0.398     & 0.721 \\
+        &                             & \checkmark & 0.442 & 0.560 & 0.467     & 0.698 \\ 
+        & \multirow{2}{*}{RTDETR}     &            & 0.513 & 0.636 & 0.561     & 0.734 \\
+        &                             & \checkmark & 0.523 & 0.655 & 0.609     & 0.709 \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:SORTのトラッキング性能}
+\end{table}
+次に、SORTの検出性能および、基準となる検出モデルの性能が与える影響について検証した
+。表~\ref{tab:SORTのトラッキング性能}に検証結果を示す。
+各モデルについて、それ単体の検出性能とそのモデルによる検出結果をSORTに入力した場合の性能を示している。
+SORTは物体の外観や入力画像によらず、物体検出モデルによる検出結果のみに依存するため、使用するモデルによって性能に大きな差があることがわかる。
+また、すべての組み合わせにおいて一貫してPrecisionは元のモデルよりも高く、Recallは低い値となっている。
+この傾向は、SORTのトラッキング処理が一時的な誤検出を効果的に排除しているためであると考えられる。
+SORTでは前後のフレームとの位置の連続性が重視されるため、単一フレームのみで発生した突発的な誤検出が追跡対象から除外されやすく、結果としてPrecisionの向上がみられた。
+一方で、物体の遮蔽や検出モデルの連続した検出漏れがあった場合、$max_{age}=1$の制約によって即座にトラッキングが中断されるため、同一物体であっても追跡が途切れやすく、Recallの低下につながったと考えられる。
+モデル間の比較に目を向けると、元論文~\cite{SORT}の指摘通り、ベースとなる物体検出モデルの性能がSORTの最終的なトラッキング性能を大きく左右することが確認できる。
+特に、YOLOv8nやRTDETRといった単体での検出精度が比較的高いモデルと組み合わせた場合、SORTも高い水準のトラッキング性能（KITTIでmAP 0.49前後、CARLAでmAP 0.52前後）を達成できている。
+一方、RetinaNetおよびRTDETRについては、SORT適用後の性能がベースモデル単体を上回っている。
+これは、これらのモデルがRecallは高いものの誤検出を多く含む傾向にあるため、SORTのフィルタリングが有効に機能し、Precisionが大幅に改善されたためと考えられる。
+
+\subsection{トラッキングと検出を組み合わせた時の性能}
+\begin{table}[htbp]
+    \centering
+    \caption{SORTと検出を組み合わせた際の検出性能}
+    \begin{tabular}{llcccc}
+         \toprule
+         Dataset & 
+         model        &  mAP  & F1    & Precision & Recall \\
+         \midrule
+         \multirow{4}{*}{KITTI} 
+         & YOLOv8n    & 0.493 & 0.662 & 0.751     & 0.593 \\
+         & SSD        & 0.370 & 0.559 & 0.881     & 0.409 \\
+         & RetinaNet  & 0.381 & 0.458 & 0.325     & 0.778 \\
+         & RTDETR     & 0.470 & 0.570 & 0.461     & 0.748 \\
+         \midrule
+         \multirow{4}{*}{CARLA}
+         & YOLOv8n    & 0.501 & 0.719 & 0.823     & 0.639 \\
+         & SSD        & 0.461 & 0.623 & 0.940     & 0.466 \\
+         & RetinaNet  & 0.399 & 0.516 & 0.400     & 0.725 \\
+         & RTDETR     & 0.514 & 0.638 & 0.563     & 0.736 \\
+         \bottomrule
+    \end{tabular}
+    \label{tab:SORTと組み合わせた検出性能}
+\end{table}
+表~\ref{tab:SORTと組み合わせた検出性能}は、物体検出モデルによる検出結果とSORTによる予測結果を両方採用して最終出力を構成した場合の性能を示している。
+表~\ref{tab:SORTのトラッキング性能}の検出モデル単体の結果と比較すると、すべての組み合わせにおいてPrecisionが向上またはほぼ同等を維持しつつ、Recallの低下が単体のSORTよりも抑えられていることが確認できる。
+これは、SORTの予測結果に加えて検出モデルの出力も最終結果に組み込むことで、SORTのトラッキングが途切れた物体を検出モデルが補完できるためと考えられる。
+モデルの特性による差異についても同様の傾向が見られる。
+YOLOv8nやSSDのようにPrecisionが高いモデルでは、組み合わせによるPrecisionのさらなる向上は限定的である一方、Recallの低下も小幅にとどまり、mAPおよびF1スコアはほぼ単体と同等の水準を維持している。
+一方、RetinaNetやRTDETRのようにRecallが高くPrecisionが低いモデルでは、SORTのフィルタリングによってPrecisionが改善されつつ、検出モデルの出力との組み合わせによってRecallの過度な低下が抑制され、結果としてmAPおよびF1スコアの向上が確認できる。
+以上の結果から、物体検出モデルの出力とSORTの予測結果を組み合わせることで、SORTのみを使用する場合と比較してRecallの低下を抑えつつPrecisionの改善効果を維持できることが示された。
+（※この結果は$max\_age$, $min\_hits$やどのように出力を決定するかにも左右される。）
+
+\section{実験計画}
+\label{sec:experiment plan}
+本節では、提案手法の有効性を評価するための実験設定について説明する。データセット、パラメータ設定のための予備分析、および評価プロトコルを含む。
+
+\subsection{データセット}\label{sec:dataset}
+本研究のは高い信頼性と低い計算コストの両方が重要となる自動運転を対象とする。
+提案手法は連続フレームで動作するため、連続した画像データで構成されるデータセットが必要である。
+これらの条件を満たすため、KITTIのTracking データセット~\cite{KITTI}、オープンソースの自動運転シミュレータCARLA~\cite{CARLA2017}で作成したデータセットを使用した。
+CARLAでのデータセット収集にはCARLA 0.9.13を使用し、シミュレーション環境内で自動運転車を走行させ、車両底面中央を原点として$(x, y, z) = (1.5, 0.0, 2.0)$の位置にRGBカメラと深度センサーを搭載した。
+視野角は60度である。
+RGBカメラの画像解像度は$800 \times 600$ピクセル、フレームレートは20fpsとし、シミュレーション時間100秒で合計2{,}000フレームを取得した。
+全画像はTown02マップにて晴れ・曇り・雨の3つの天候条件を含むシナリオで収集した。
+
+KITTIデータセットとCARLAデータセットの主な違いとしては、
+\begin{enumerate}
+    \item シミュレーション環境と現実世界の環境
+    \item データセットのサイズ。CARLAは2000枚の画像であり、KITTIはTrackingの0020の場合は823枚である。
+    \item 含まれる物体のクラス。CARLAでは歩行者、車、信号、標識の4つを有効なオブジェクトクラスとしており、KITTIのTrackingの0020の場合は車のみを含む。
+    \item KITTIは実世界の連続したフレーム画像のため、天候や道路などの環境が大きく一定である。CARLAはシミュレーション環境のため急激な変化を含む。
+\end{enumerate}
+
+\subsection{物体検出モデル}
+様々な物体検出器の組み合わせを評価するため、
+\begin{enumerate}
+    \item YOLOv8n~\cite{YOLOv8}
+    \item RT-DETRv2-l~\cite{RTDETRv2}
+    \item SSD300\_VGG16~\cite{SSD2016}
+    \item RetinaNet\_ResNet50\_FPN\_V2~\cite{RetinaNet2020}
+\end{enumerate}
+の4つの物体検出モデルを用意した。
+YOLOv8nは軽量なベースモデル$M_1$として使用し、その他のモデルは冗長モデル$M_2$および$M_3$として使用する。
+YOLOおよびRT-DETRモデルはUltralyticsライブラリから、SSDおよびRetinaNetはPyTorchから取得した。
+全モデルはCOCOデータセットで事前学習済みのものをファインチューニングなしで使用した。
+
+\subsection{パラメータ設定}
+\label{parameter setting}
+提案手法の評価にはトラッキング結果との一致度に基づくモード遷移閾値$\theta_{track}$、およびモデル間一致度の閾値$\theta_{high}$の2つのパラメータの設定が必要である。
+
+\subsubsection{$\theta_{track}$}
+\label{confidence threshold}
+$\theta_{track}$は過去のフレームから推定された現在の状態と、実際に現在のフレームに対する検出結果から、single-version modeからtwo-version modeへの遷移に使用される。
+適切な値を決定するため、多様なモデルでどの程度の値をとるか検証した。
+\begin{table}[htbp]
+    \centering
+    \caption{SORTと検出の一致度(Jaccad係数)}
+    \begin{tabular}{llc}
+         \toprule
+         Dataset & 
+         Model & Jaccad \\
+         \midrule
+         \multirow{4}{*}{KITTI} 
+         & YOLOv8n    & 0.828 \\
+         & SSD        & 0.859 \\
+         & RetinaNet  & 0.750 \\
+         & RTDETR     & 0.775 \\
+         \midrule
+         \multirow{4}{*}{CARLA}
+         & YOLOv8n    & 0.910 \\
+         & SSD        & 0.934 \\
+         & RetinaNet  & 0.824 \\
+         & RTDETR     & 0.882 \\
+         \bottomrule
+    \end{tabular}
+    \label{tab:SORTと検出の一致度}
+\end{table}
+表~\ref{tab:SORTと検出の一致度}から、すべてのデータセットおよびモデルにおいてJaccard係数が0.75以上と高い一致度を示していることがわかる。特にYOLOv8nやSSDでは、CARLAデータセットにおいて0.9以上の極めて高い一致度を記録した。
+これは、これらのモデルは一時的な誤検出を出力しにくく、検出数そのものが少ない傾向にあるためにSORTのカルマンフィルタによる位置予測と高精度にマッチングしていることを意味する。
+一方、RetinaNetやRTDETRではJaccard係数が相対的に低い傾向にある。
+これは、これらのモデルの検出結果にフレームごとの一時的な誤検出が多く含まれているためと考えられる。
+以上の結果から、すべてのモデルおよびデータセットにおいてJaccard係数は0.75以上であることが確認された。
+$\theta_{track}$をこの範囲より低く設定すると、ほぼすべてのフレームでtwo-version modeへの遷移が発生せず、single-version modeが維持され続けてしまう。
+したがって、遷移が適切に機能するよう$\theta_{track}=0.80$を採用した。
+
+\subsubsection{モデル間一致度}
+\label{inter-model agreement}
+閾値$\theta_{high}$と$\theta_{low}$は、一致度スコアに基づくtwo-version modeからsingle-versionへの遷移に使用される。
+適切な値を決定するため、YOLOv8nと各候補モデル間のJaccard係数、および2つのモデルが一致した場合と一致しなかった場合の検出精度を評価した。
+表~\ref{tab:Evaluation of the relationship between output agreement and accuracy}に示すように、モデルペア間のJaccard係数は約0.4〜0.8の範囲である。
+Jaccard係数が0.8以上の場合、2つのモデルはほぼ一致した結果を生成していることを示し、two-version modeを維持する利点は小さいことが示唆される。
+これらの観察に基づき、$\theta_{high}$を0.6に設定した。
+
+\begin{table}[ht]
+    \centering
+    \caption{モデル間の検出の一致率}
+    \begin{tabular}{llccc}
+        \hline
+        Model1 & Model2 & Jaccard係数 \\
+        \hline
+        YOLOv8n & SSD          & 0.751 \\
+        YOLOv8n & RetinaNet    & 0.781 \\
+        YOLOv8n & RTDETR       & 0.847 \\
+        \hline
+    \end{tabular}
+    \label{tab:Evaluation of the relationship between output agreement and accuracy}
+\end{table}
+
+
+\subsection{評価指標}
+最終出力の検出性能は、IoU閾値0.5におけるprecision、recall、F1、mAPを用いて評価した。
+これらの指標は以下で定義される:
+\begin{equation}
+    \text{Precision} = \frac{TP}{TP + FP}
+\end{equation}
+\begin{equation}
+    \text{Recall} = \frac{TP}{TP + FN}
+\end{equation}
+\begin{equation}
+    \text{F1} = \frac{2 \times \text{Precision} \times \text{Recall}}
+    {\text{Precision} + \text{Recall}}
+\end{equation}
+\begin{equation}
+    \text{AP} = \int_0^1 p(r)\, dr
+\end{equation}
+\begin{equation}
+    \text{mAP} = \frac{1}{|C|} \sum_{c\in C}^{C} \text{AP}_c
+\end{equation}
+ここで、TP, FP, FNはそれぞれ真陽性(True Positive)、偽陽性(False Positive)、偽陰性(False Negative)の数に対応する。
+$p(r)$は各recall値におけるprecisionの値であり、$C$は対象とする物体クラスの集合である($C=\{Pedestrian, Vehicle, TrafficLight, TrafficSign\}$。
+
+冗長性による計算オーバーヘッドを評価するため、システムの処理時間を比較する。
+
+\section{結果と考察}
+\label{sec: results and discussion}
+本節では、single-versionのベースラインおよび2つの物体検出モデルを用いたstatic redundant systemと比較した提案手法の評価結果を示す。
+
+\subsection{single-version systemの評価結果}
+
+% \begin{table}[t]
+%   \centering
+%   \caption{static 1-version baselineの検出性能}
+%   \label{tab:baseline}
+%   \begin{tabular}{llccccc}
+%     \toprule
+%     Dataset
+%     & モデル     & mAP   & F1    & precision & recall & Time (s) \\
+%     \midrule
+%     \multirow{5}{*}{KITTI}
+%     & yolov8n   & 0.493 & 0.662 & 0.751     & 0.592  & 40.36 \\
+%     & rtdetr    & 0.470 & 0.570 & 0.461     & 0.748  & 65.11 \\
+%     & ssd       & 0.370 & 0.559 & 0.880     & 0.409  & 74.60 \\
+%     & retinanet & 0.382 & 0.459 & 0.325     & 0.779  & 58.28 \\
+%     \midrule
+%     \multirow{5}{*}{CARLA}
+%     & yolov8n   & 0.498 & 0.716 & 0.819     & 0.636  & 112.92 \\
+%     & rtdetr    & 0.513 & 0.636 & 0.561     & 0.734  & 155.19 \\
+%     & ssd       & 0.456 & 0.618 & 0.933     & 0.462  & 216.75 \\
+%     & retinanet & 0.396 & 0.513 & 0.398     & 0.721  & 145.49 \\
+%     \bottomrule
+%   \end{tabular}
+% \end{table}
+\begin{table}[t]
+  \centering
+  \caption{各モデルの検出性能}
+  \label{tab:baseline}
+  \begin{tabular}{llccccc}
+    \toprule
+    Dataset
+    & モデル      & mAP   & precision & recall & Time (s) \\
+    \midrule
+    \multirow{7}{*}{KITTI\_0020}
+    & yolov8n    & 0.800 & 0.797     & 0.856  & 37.23 \\
+    & yolov11n   & 0.797 & 0.770     & 0.856  & 39.55 \\
+    & rtdetr     & 0.938 & 0.692     & 0.948  & 58.53 \\
+    & ssd        & 0.512 & 0.825     & 0.712  & 43.31 \\
+    & retinanet  & 0.617 & 0.522     & 0.878  & 51.75 \\
+    & fcos       & 0.891 & 0.274     & 0.961  & 51.97 \\
+    & fasterrcnn & 0.689 & 0.712     & 0.791  & 47.94 \\
+    \midrule
+    \multirow{7}{*}{KITTI\_0019}
+    & yolov8n    & 0.690 & 0.816     & 0.904  & 50.94 \\
+    & yolov11n   & 0.670 & 0.895     & 0.882  & 54.95 \\
+    & rtdetr     & 0.885 & 0.806     & 0.972  & 77.69 \\
+    & ssd        & 0.426 & 0.769     & 0.787  & 63.44 \\
+    & retinanet  & 0.584 & 0.436     & 0.922  & 71.31 \\
+    & fcos       & 0.700 & 0.152     & 0.963  & 75.38 \\
+    & fasterrcnn & 0.585 & 0.656     & 0.870  & 67.87 \\
+    \midrule
+    \multirow{7}{*}{KITTI\_0001}
+    & yolov8n    & 0.684 & 0.777     & 0.806  &21.59 \\
+    & yolov11n   & 0.602 & 0.777     & 0.806  &22.27 \\
+    & rtdetr     & 0.726 & 0.713     & 0.850  &33.56 \\
+    & ssd        & 0.485 & 0.838     & 0.727  &25.66 \\
+    & retinanet  & 0.481 & 0.518     & 0.820  &30.59 \\
+    & fcos       & 0.702 & 0.362     & 0.874  &30.91 \\
+    & fasterrcnn & 0.583 & 0.723     & 0.782  &28.16 \\
+    \midrule
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+まず、個々の物体検出モデルの性能をベースラインとして評価する。
+表~\ref{tab:baseline}に異なる検出モデルの性能をまとめる。
+KITTIデータセットでは、YOLOv8nがmAP 0.493、F1スコア0.662を達成し、最も高いmAPを記録した。
+RTDETRはrecall 0.748と高い値を示したが、mAPおよびF1スコアではYOLOv8nを下回った。
+SSDは0.880と最も高いprecisionを示した一方、recallが0.409と低く、見逃しが多い傾向にある。
+RetinaNetはrecall 0.779と高い値を示したが、precision 0.325と低く、誤検出が多かった。
+CARLAデータセットでは、RTDETRがmAP 0.513と最も高い値を達成し、SSDがprecisionで最も高い0.933を達成した。
+処理時間については、YOLOv8nがKITTIで40.36s、CARLAで112.92sと両データセットで最も短く、SSDやRTDETRは1.5~2倍程度の計算時間を要した。
+これらの結果は各モデルが異なる性能特性を示しており、precision・recall・mAP・計算コスト間のトレードオフを示している。
+
+\subsection{提案手法の評価結果}
+\begin{table*}
+    \caption{提案手法の性能評価}
+    \centering
+    \begin{tabular}{llllllllll}
+    \toprule
+    Dataset 
+    & Model\_1 & Model\_2  & $\theta_{track}$ & $\theta_{high}$ & mAP   & F1    & Precision & Recall  & Time (s) \\
+    \midrule
+    \multirow{3}{*}{KITTI}
+    & yolov8n  & rtdetr    & 0.80             & 0.60            & 0.606 & 0.503 & 0.368     & 0.798   & 88.53 \\
+    & yolov8n  & ssd       & 0.80             & 0.60            & 0.561 & 0.644 & 0.651     & 0.637   & 102.50 \\
+    & yolov8n  & retinanet & 0.80             & 0.60            & 0.640 & 0.416 & 0.280     & 0.808   & 104.21 \\
+    \midrule
+    \multirow{3}{*}{CARLA}
+    & yolov8n & rtdetr     & 0.80             & 0.60            & 0.636 & 0.607 & 0.528     & 0.712   & 179.00 \\
+    & yolov8n & ssd        & 0.80             & 0.60            & 0.532 & 0.711 & 0.798     & 0.641   & 200.10 \\
+    & yolov8n & retinanet  & 0.80             & 0.60            & 0.554 & 0.484 & 0.364     & 0.721   & 201.94 \\
+    \bottomrule
+    \end{tabular}
+    \label{tab:adrod}
+\end{table*}
+表~\ref{tab:adrod}より、提案手法の性能は追加モデル$M_2$の特性に大きく依存することが確認できた。
+KITTIデータセットでは、RetinaNetを追加モデルとして用いた場合にmAP 0.640と最も高い値を達成した。
+一方、Precisionが0.280と極めて低くF1スコアは0.416に留まっており、これはRetinaNetが高いRecallを持つ反面、多くの誤検出を含む傾向を反映していると考えられる。
+SSDを用いた場合はPrecision 0.651、F1スコア0.644とバランスの取れた性能を示した。
+RTDETRを用いた場合は0.798と高いrecallを示したが、Precisionが0.368と低く、mAP 0.606、F1スコア0.503となった。
+
+CARLAデータセットでは、RTDETRがmAP 0.636と最も高い値を達成し、KITTIと同様にYOLOv8nが見逃した物体を補完する効果が確認できた。
+SSDはPrecision 0.798と最も高く誤検出の抑制に優れていたが、mAPは0.532と低く、検出対象を網羅的に捉える能力は限定的であった。
+RetinaNetはRecall 0.721を維持したものの、F1スコア0.484と低く、誤検出の多さが課題として残った。
+
+処理時間については、両データセットでRTDETRが最も短く（KITTI: 88.53s、CARLA: 179.00s）、SSDおよびRetinaNetはそれより約15〜20秒長い傾向にあった。
+
+これらの結果から、追加モデルには大きく二つの役割が存在すると考えられる。SSDのようにPrecisionが高いモデルは誤検出の抑制に寄与しF1スコアの向上に効果的である一方、RTDETRやRetinaNetのようにRecallが高いモデルは検出漏れの補完に有効でありmAPの向上に寄与する。
+
+\subsection{static redundant systemの評価結果}
+\begin{table*}[ht]
+    \centering
+    \caption{static 2-version systemの性能}
+    \begin{tabular}{lllccccc}
+    \toprule
+    Dataset & 
+    Model 1   & Model 2   & mAP   & F1-Score & Precision & Recall & Time (s) \\
+    \midrule
+    \multirow{3}{*}{KITTI}
+    & yolov8n & rtdetr    & 0.622 & 0.507 & 0.368 & 0.815 & 96.94 \\
+    & yolov8n & ssd       & 0.557 & 0.641 & 0.645 & 0.637 & 116.04 \\
+    & yolov8n & retinanet & 0.652 & 0.418 & 0.280 & 0.824 & 94.61 \\
+    \midrule
+    \multirow{3}{*}{CARLA}
+    & yolov8n & rtdetr    & 0.661 & 0.600 & 0.505 & 0.738 & 235.77 \\
+    & yolov8n & ssd       & 0.530 & 0.708 & 0.789 & 0.642 & 273.91 \\
+    & yolov8n & retinanet & 0.556 & 0.474 & 0.351 & 0.730 & 231.79 \\
+    \bottomrule
+    \end{tabular}
+    \label{tab:nversion}
+\end{table*}
+表~\ref{tab:nversion}より、static 2-version systemの性能傾向は提案手法と概ね一致しており、追加モデル$M_2$の特性が全体の性能を左右することが確認できた。
+KITTIデータセットでは、RetinaNetを$M_2$とした場合にmAP 0.652と最も高い値を達成した。
+しかしPrecisionは0.280と極めて低いために、F1スコアは0.418に留まった。
+RTDETRを用いた場合もRecall 0.815と高い結果となったが、同様にPrecisionが低くF1スコアは0.507であった。
+SSDを用いた場合はPrecision 0.645、F1スコア0.641とバランスの取れた性能を示した。
+CARLAデータセットでは、RTDETRがmAP 0.661と最も高い値を達成し、KITTIと同様の傾向を示した。
+SSDはPrecision 0.789と最も高くF1スコア0.708を記録した一方、mAPは0.530と低かった。
+RetinaNetはRecall 0.730を維持したものの、precisionの低さからF1スコア0.474となった。
+
+処理時間については、両データセットでRetinaNetが最も短く（KITTI: 94.61s、CARLA: 231.79s）、SSDが最も長い傾向にあった。
+これは単一モデルの検出時間の結果と一致している。
+
+\subsection{1-version systemとの比較}
+提案手法は1-version systemと比較して、いずれのモデル組み合わせにおいてもmAPが大幅に向上した。
+KITTIデータセットでは、YOLOv8n単体のmAP 0.493に対し、提案手法（YOLOv8n + RTDETR）はmAP 0.606、（YOLOv8n + RetinaNet）はmAP 0.640を達成した。
+CARLAデータセットでも同様に、YOLOv8n単体のmAP 0.498に対し、提案手法（YOLOv8n + RTDETR）はmAP 0.636と大きく上回った。
+これは提案手法が不確実なフレームに対して選択的に追加モデルを起動することで、単一モデルが見逃していた物体を効果的に補完できていることを示している。
+一方、処理時間については、単一モデルと比較して追加モデルの起動分のオーバーヘッドが生じているが、該当するモデルの処理時間の和よりも短い時間で完了している。
+
+\subsection{static 2-version systemとの比較}
+提案手法はstatic 2-version systemと同等の追加モデルを使用した場合、mAPがわずかに低下する傾向にある。
+例えばKITTIデータセットにおいてYOLOv8n + RTDETRの組み合わせでは、static 2-version systemのmAP 0.622に対し提案手法はmAP 0.606と若干低い。
+しかしその一方で、処理時間については提案手法がKITTIで88.53秒、CARLAで179.00秒であるのに対し、static 2-version systemはKITTIで96.94秒、CARLAで235.77秒と、提案手法が一貫して短い処理時間を達成している。
+PrecisionについてはKITTI（YOLOv8n + SSD）において、static 2-version systemの0.645に対し提案手法は0.651とわずかに高い値を示した。
+これは提案手法がモデル間の一致度が高い場合に追加モデルを停止することで、冗長な検出による誤検出の増加を抑制できているためと考えられる。
+以上の結果から、提案手法は1-version systemと比較して検出性能を大幅に向上させつつ、static 2-version systemと比較して計算コストを削減できることが確認された。
+mAPのわずかな低下と引き換えに処理時間を短縮するというトレードオフは、リアルタイム性が求められる自動運転システムの観点から実用的な選択肢であるといえる。
+
+\subsection{閾値感度分析}
+
+提案手法の性能は$\theta_{track}$および$\theta_{high}$の2つの閾値に依存する。本節では，これらの閾値がsingle-version modeで処理されるフレームの割合（以下，single割合）に与える影響を分析する。
+
+\subsubsection{分析結果}
+
+表~\ref{tab:sensitivity}に，各データセット・モデル組み合わせにおける$\theta_{track}$および$\theta_{high}$の組み合わせに対するsingle割合(\%)を示す。
+
+\begin{table*}[t]
+  \centering
+  \caption{閾値の組み合わせごとのsingle-version mode割合 (\%)}
+  \label{tab:sensitivity}
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{llccccccccc}
+    \toprule
+    & & \multicolumn{3}{c}{$\theta_{high}=0.5$} & \multicolumn{3}{c}{$\theta_{high}=0.6$} & \multicolumn{3}{c}{$\theta_{high}=0.7$} \\
+    \cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}
+    Dataset & $M_2$ & \multicolumn{3}{c}{$\theta_{track}$} & \multicolumn{3}{c}{$\theta_{track}$} & \multicolumn{3}{c}{$\theta_{track}$} \\
+    \cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}
+    & & 0.7 & 0.8 & 0.9 & 0.7 & 0.8 & 0.9 & 0.7 & 0.8 & 0.9 \\
+    \midrule
+    \multirow{3}{*}{KITTI}
+    & rtdetr    & 26.8 & 14.9 &  6.5 &  9.9 &  6.7 &  4.1 &  5.0 &  3.2 &  1.0 \\
+    & ssd       & 47.3 & 32.3 & 18.9 & 31.5 & 14.3 &  7.8 & 24.1 &  8.4 &  3.1 \\
+    & retinanet & 10.8 &  6.7 &  4.3 &  7.0 &  5.3 &  2.9 &  4.4 &  2.6 &  0.5 \\
+    \midrule
+    \multirow{3}{*}{CARLA}
+    & rtdetr    & 62.3 & 48.5 & 43.1 & 53.6 & 37.4 & 33.8 & 38.8 & 29.0 & 26.2 \\
+    & ssd       & 76.8 & 62.7 & 57.0 & 69.0 & 52.2 & 44.9 & 52.4 & 35.6 & 30.8 \\
+    & retinanet & 43.2 & 28.6 & 27.5 & 33.6 & 22.8 & 20.7 & 21.2 & 14.4 & 14.4 \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\subsubsection{考察}
+
+全72構成のsingle割合の平均は30.6\% である。
+データセット別にみるとKITTIの場合のほうがSingle-versionでの処理の割合が小さい。
+データセットの画像を見ると、KITTIは非常に車の混雑した環境であるために新たな物体の出現が頻繁となったりオクルージョンが発生しやすく過去の結果と一致しにくくなったこと、また検出する物体が多い分モデル間でも検出できた物体数に差が生まれやすかったのではないかと考えられる。
+また、構成によってsingle割合は0.5\%から76.8\%まで大きく変動しており，閾値の選択およびモデルの組み合わせが動作に大きく影響することが確認できる。
+
+$\theta_{track}$の影響に着目すると，$\theta_{track}$が小さいほどsingle-version modeのまま維持される割合が高くなる。これは，$\theta_{track}$が小さいほどtwo-version modeへの遷移条件が緩くなり，より多くのフレームが不確実と判定されないためである。
+例えばKITTIにおける$(M_2 = ssd,\theta_{high}=0.5$）では，$\theta_{track}$が0.7から0.9に変化するとsingle割合が47.3\%から18.9\%へと大幅に低下する。
+
+$\theta_{high}$の影響については，$\theta_{high}$が小さいほどtwo-version modeからsingle-version modeへ戻りやすくなるため，single割合が高くなる傾向にある。
+KITTIにおけるrtdetrの場合，$\theta_{track}=0.8$固定でも$\theta_{high}$が0.5から0.7へ変化するとsingle割合が14.9\%から3.2\%へと低下し，two-version modeに留まるフレームが増加することが確認できる。
+
+モデルの組み合わせによる違いも顕著である。
+SSDを$M_2$とした場合はsingle割合が高く，YOLOv8nとの検出一致度が高いため，two-version modeから速やかにsingle-version modeへ復帰しやすいことを示している。
+一方，RetinaNetやRTDETRを$M_2$とした場合はsingle割合が低く，モデル間の検出差異が大きいために二つのモデルによる検出が長く継続される傾向にある。
+この傾向は表~\ref{tab:nversion}において，RTDETRおよびRetinaNetが高いRecallを示す一方でPrecisionが低い結果と対応しており，$M_2$の検出特性がバージョン遷移の挙動を大きく左右することが改めて確認できる。
+
+\subsubsection{処理時間とバージョン遷移の関係}
+表~\ref{tab:adrod}・表~\ref{tab:nversion}・表~\ref{tab:sensitivity}を照合すると，提案手法の処理時間がstatic 2-version systemを上回るケースが存在することが確認できる。
+
+KITTIデータセットにおけるYOLOv8n + RetinaNetの組み合わせでは，提案手法の処理時間104.21秒に対し，static 2-version systemは94.61秒と短い。
+同様に，YOLOv8n + SSDの組み合わせでも提案手法102.50秒に対してstatic 2-version systemは116.04秒と，こちらは逆転している。
+この結果の原因を，表~\ref{tab:sensitivity}のsingle割合から説明できる。
+
+$\theta_{track}=0.8$，$\theta_{high}=0.6$の設定（本実験での採用値）において，KITTI + RetinaNetのsingle割合は5.3\%にとどまる。すなわち，全フレームのうち約94.7\%においてtwo-version modeで処理が行われており，実質的にstatic 2-version systemとほぼ同等の計算量を消費している。
+加えて，提案手法ではバージョン遷移の判定のためにSORTによるトラッキングおよびJaccard係数の計算が毎フレーム実行されるため，このオーバーヘッドが積み重なり，static 2-version systemよりも処理時間が長くなったと考えられる。
+
+一方，KITTIにおけるYOLOv8n + SSDでは同条件でのsingle割合が14.3\%であり，RetinaNetと比較してsingle-version modeで処理されるフレームが多い。その結果，バージョン遷移のオーバーヘッドを追加モデルの起動回数削減によって相殺でき，提案手法（102.50秒）がstatic 2-version system（116.04秒）を下回る処理時間を達成している。
+CARLAデータセットでは，すべてのモデル組み合わせにおいてsingle割合がKITTIよりも高く（RTDETRで37.4\%，SSDで52.2\%，RetinaNetで22.8\%），いずれの組み合わせでも提案手法がstatic 2-version systemよりも短い処理時間を達成している。
+
+これらの結果から，提案手法が計算コスト削減の効果を発揮するためには，single-version modeで処理されるフレームの割合が一定以上確保される必要があることが示唆される。single割合が極端に低い場合，バージョン遷移判定のオーバーヘッドが原因となり，static 2-version systemよりも処理時間が増加するという逆効果が生じる。
+したがって，$\theta_{track}$および$\theta_{high}$の設定においては，対象データセットおよびモデルの組み合わせに応じてsingle割合が適切な水準となるよう調整することが，計算効率の観点から重要である。
+
+\section{Validation}
+本節では、検出結果間の一致度が、入力フレームの検出難易度のプロキシとして利用できるという仮説を検証する。
+具体的には、検出結果の不一致が検出エラーと関連しているか、およびフレーム単位の一致度がそれらのエラーの構造を反映しているかについて調査する。
+
+\subsection{Experimental Setup}
+評価にはKITTIトラッキングデータセットを使用した。
+物体検出モデルとしては、YOLOv8n、YOLO11n、RT-DETR-l、FCOS、RetinaNet、Faster R-CNN、およびSSDを用いた。
+各モデルはKITTI detection データセットでファインチューニングを行った。
+
+検出モデルペアおよび検出モデル-トラッカーペアごとに、検出結果を空間的な重なり具合に基づいてグループ化し、各検出結果を以下の4つのカテゴリのいずれかに分類した。
+
+\begin{itemize}
+    \item \textbf{Common FP}: Both models detect the same nonexistent object.
+    \item \textbf{Common FN}: Both models miss the same ground-truth object.
+    \item \textbf{One-model FP}: Only one model produces a false positive.
+    \item \textbf{One-model FN}: Only one model misses a ground-truth object.
+\end{itemize}
+
+エラー率は次のように定義されます。
+
+\begin{equation}
+ER=\frac{N_{error}}{N_{total}},
+\end{equation}
+
+ここで、$N_{error}$はエラーが発生したインスタンスの数、$N_{total}$は評価対象となったインスタンスの総数です。
+
+一致度とエラー特性の関係を分析するために、フレームレベルのエラー率を2つ定義します。
+
+最大エラー率は、いずれかのモデルで発生したすべてのエラーの和集合を表します。
+
+\begin{equation}
+ER_{max}
+=
+\frac{
+N_{commonFP}
++
+N_{commonFN}
++
+N_{oneFP}
++
+N_{oneFN}
+}
+{N_{total}}.
+\end{equation}
+
+最小誤り率は、両方のモデルに共通する誤りだけを表しています。
+
+\begin{equation}
+ER_{min}
+=
+\frac{
+N_{commonFP}
++
+N_{commonFN}
+}
+{N_{total}}.
+\end{equation}
+
+2つの検出結果間のフレームレベルでの一致度は、ジャカード係数を用いて測定されます。
+
+\subsection{Relationship Between Detection Agreement and Error}
+まず、検出結果の不一致が検出エラーと関連しているかどうかを調査します。
+検出器ペアおよび検出器・トラッカーペアごとに、検出結果を2つのグループに分類します。
+
+\begin{itemize}
+    \item \textbf{一致}: 両方の検出結果に含まれるもの
+    \item \textbf{不一致}: 片方の検出結果にのみ含まれるもの
+\end{itemize}
+この各グループについて、エラー率を計算する。
+
+\subsection{Results}
+\subsubsection{Agreement vs. Error Rate}
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\linewidth]{images/average_error_rates.png}
+    \caption{Comparison of error rates for agreed and disagreed detections.}
+    \label{fig:agree_error}
+\end{figure*}
+
+図~\ref{fig:agree_error}に各モデル間およびモデル・トラッカー間の一致検出（Agree）と不一致検出（Disagree）のerror rateを示す。
+すべての組み合わせにおいて，不一致検出のerror rateは一致検出より大幅に高くなっており，検出結果の不一致は誤検出（FPまたはFN）を含む可能性が高いことが確認できる。
+これは，複数の検出結果が一致しない場合には，少なくとも一方の検出結果が誤りであるという仮説と一致しており，検出の一致度が検出の信頼性を評価する指標となり得ることを示している。
+
+また，不一致検出のerror rateはモデルの組み合わせによって大きく異なることも分かる。
+例えば，FCOSやRT-DETRを含む組み合わせでは0.9を超えるものが多い一方，SSDやRetinaNetを含む組み合わせでは0.6～0.8程度に留まっている。
+表~\ref{tab:baseline}より，FCOSは非常に高いRecall（0.87～0.96）を有する一方でPrecisionが0.15～0.36と著しく低く，多数のFPを生成するモデルである。
+また，RT-DETRは高いRecall（0.85～0.97）を有するがPrecisionはYOLO系と比較して低い。
+一方，SSDはmAPは低いもののPrecisionが0.77～0.84と高く，RetinaNetもPrecisionは高くないもののFCOSほど極端ではない。
+そのため，高Recallモデル同士ではそれぞれ異なるFPが生成されやすく，不一致検出の大部分が誤検出となることからDisagree Error Rateが高くなったと考えられる。
+
+一方，一致検出のerror rateは0.15～0.30程度で推移しており，不一致検出と比較して大幅に低いものの，組み合わせによって差がみられる。
+特にFCOSとRetinaNet，RetinaNetとFaster R-CNNなどではAgree Error Rateが比較的高くなっている。
+これは，両モデルが類似した誤検出を生成しているため，共通FPが増加したことが原因であると考えられる。
+逆に，YOLOv8nとYOLO11nやYOLOとSSDの組み合わせではAgree Error Rateが低く，一致した検出は高い確率で正しい検出となっている。
+
+さらに，モデル・トラッカー間でも同様の傾向が確認できる。
+トラッカーは過去フレームの情報を利用するため，物体の運動が安定している場合には検出結果と高い一致を示す。
+一方，遮蔽や急激な移動などによりトラッキングが破綻した場合には検出結果との不一致が発生し，その不一致部分では高いerror rateが観測された。
+これは，時間方向の一致度についても，モデル間の一致度と同様に検出誤りを反映することを示している。
+
+以上より，モデル間・時間方向のいずれにおいても，不一致検出は一致検出より著しく高いerror rateを示すことが確認された。この結果は，検出の一致度が対象画像あるいは対象物体の検出難易度を反映しており，不確実性のプロキシとして利用可能であることを支持する結果である。
+
+\subsubsection{Jaccard係数と誤り構造の関係}
+次に，検出結果の一致度が誤りの種類とどのような関係を有するかを調査した．
+各フレームについてJaccard係数を算出し，Jaccard係数を0.1刻みで区間化した．
+
+各区間に対して
+
+\begin{itemize}
+ \item 共通FP数
+ \item 共通FN数
+ \item 単一モデルFP数
+ \item 単一モデルFN数
+ \item 最大誤り率
+ \item 最小誤り率
+\end{itemize}
+
+の分布をボックスプロットとして可視化した．
+\section{結論と今後の課題}
+\label{sec: conclusion}
+本研究では、検出結果の不確実性とモデル間一致度に基づいてアクティブなモデル数を動的に調整し、高い信頼性と低い計算コストの両立を目指す適応的冗長物体検出手法を提案した。
+提案手法は単一の軽量モデルで推論を開始し、検出の不確実性が高い場合にのみアクティブなモデル数を動的に増加させ、検出結果がモデル間で一致している場合は削減することで、信頼性を犠牲にすることなく計算コストを最小化する。
+実験結果より、単一モデルは低コストである一方で検出性能に限界があり、静的冗長システムはモデル数の増加に伴い検出性能が向上するものの計算コストが大幅に増加することが確認された。
+これに対し提案手法は、フレームごとの不確実性に基づいてアクティブなモデル数を動的に制御することで、static 2-version systemと比較して計算コストを削減しつつ、同等に近い検出性能を維持した。これらの結果は、不確実性と一致度に基づいて冗長性を選択的に決定することが、全モデルを均一に実行するよりも効果的であることを示している。
+
+今後の課題としていくつかの方向性が考えられる。
+１つ目は閾値設定に関してである。
+$\theta_{track}$および$\theta_{high}$の2つの閾値を必要とする。
+本研究では予備実験から適切な値を設定したが、最適値は天候・照明・交通密度など走行環境によって異なる可能性がある。運用環境に応じてこれらの閾値を動的に適応させる手法の開発が今後の課題となる。
+2つ目はより高度な冗長性への遷移についてである。AdRODは最大2バージョンに限られており、さらなる追加モデルによる信頼性向上は望めない。より多くのバージョンへの遷移手法を考察することで、冗長性をさらに高めることが期待できる。
+3つ目は失敗事例の分析である。single-version modeに留まったまま検出を誤ったケースの詳細な分析は本研究では行っておらず、どのような状況で$\theta_{track}$による遷移判定が機能しないかを特定することが、閾値設定の改善や遷移条件の精緻化につながると考えられる。
+4つ目はsingle割合と検出性能の関係の詳細な分析である。single割合の水準とmAPの向上度合いの対応関係を体系的に分析することで、検出性能と計算効率を両立する上で実用的なsingle割合の指針を定量的に示すことができると考えられる。
+
+\section*{謝辞}
+
+\bibliography{reference}
+\bibliographystyle{plain}
+\vspace{12pt}
+
+% \section{Appendix}
+% \begin{table*}[ht]
+%   \centering
+%   \caption{2種類の出力統合手法におけるAdRODの検出性能}
+%   \label{tab:adrod-B}
+%   \setlength{\tabcolsep}{4pt}
+%   \begin{tabular}{lccc ccccc}
+%     \toprule
+%     integration method & $M_1$ & $M_2$ & $M_3$
+%       & mAP & F1 & precision & recall & cost \\
+%     \midrule
+%     \multirow{8}{*}{Affirmative}
+%     & \multirow{8}{*}{YOLOv8n}
+%     & SSD & \multirow{4}{*}{RTDETR}   
+%                       & 62.2 & 0.834 & 0.763 & 0.914 & 2.92 \\
+%     & & RetinaNet  &  & 66.8 & 0.835 & 0.756 & 0.931 & 5.97 \\
+%     & & FCOS       &  & 62.9 & 0.584 & 0.426 & 0.933 & 12.5 \\
+%     & & FasterRCNN &  & 64.3 & 0.831 & 0.752 & 0.929 & 9.10 \\
+%     \cline{3-9}
+%     & & RTDETR & \multirow{4}{*}{RetinaNet} 
+%                       & 64.4 & 0.838 & 0.767 & 0.924 & 5.01 \\
+%     & & SSD    &      & 61.7 & 0.833 & 0.763 & 0.919 & 3.06 \\
+%     & & FCOS   &      & 66.9 & 0.588 & 0.427 & 0.939 & 13.19 \\
+%     & & FasterRCNN &  & 64.3 & 0.831 & 0.752 & 0.930 & 9.28 \\
+%     \hline
+%     \multirow{3}{*}{\shortstack[l]{Conf\_base}}
+%     & \multirow{8}{*}{YOLOv8n}
+%       % & YOLOv8n, YOLOv8l, RTDETR
+%         % & 58.2 & 0.864 & 0.819 & 0.914 & 5.15 \\
+%     & SSD & \multirow{4}{*}{RTDETR}
+%                       & 54.9 & 0.863 & 0.823 & 0.907 & 2.92 \\
+%     &  & RetinaNet  & & 58.1 & 0.855 & 0.808 & 0.927 & 5.97 \\
+%     &  & FCOS       & & 56.4 & 0.811 & 0.723 & 0.923 & 12.5 \\
+%     &  & FasterRCNN & & 56.7 & 0.865 & 0.817 & 0.920 & 9.10 \\
+%     \cline{3-9}
+%     & & RTDETR & \multirow{4}{*}{RetinaNet} 
+%                       & 57.2 & 0.861 & 0.815 & 0.914 & 5.01 \\
+%     & & SSD    &      & 52.8 & 0.863 & 0.825 & 0.906 & 3.06 \\
+%     & & FCOS   &      & 58.1 & 0.813 & 0.724 & 0.928 & 13.19 \\
+%     & & FasterRCNN &  &55.1 & 0.862 & 0.813 & 0.918 & 9.28 \\
+%     \bottomrule
+%   \end{tabular}
+% \end{table*}
+
+\end{CJK}
+\end{document}

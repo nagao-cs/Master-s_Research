@@ -212,6 +212,14 @@ class ConfidenceBaseIntegrator(Integrator):
             integratedBoundingBoxList.append(averagedBoundingBox)
 
         return integratedBoundingBoxList
+    
+    def execute(self, detectionModelDict: dict[object, list[DetectionBoundingBox]]) -> tuple[list[DetectionBoundingBox], list[list[DetectionBoundingBox]]]:
+        # groupingDetections() で前処理してから integrate() を呼ぶ
+        boundingBoxGroupList: list[list[DetectionBoundingBox]
+                                   ] = self.groupingDetections(detectionModelDict)
+        integratedBoundingBoxList: list[DetectionBoundingBox] = self.integrate(
+            boundingBoxGroupList)
+        return integratedBoundingBoxList, boundingBoxGroupList
 
     def __call__(self, detectionModelDict: dict[object, list[DetectionBoundingBox]]) -> tuple[list[DetectionBoundingBox], list[list[DetectionBoundingBox]]]:
         # groupingDetections() で前処理してから integrate() を呼ぶ

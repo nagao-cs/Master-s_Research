@@ -23,6 +23,7 @@ from src.boundingBox.boundingBox import DetectionBoundingBox, GroundTruthBoundin
 from src.Evaluation.dataset import fileReader
 from src.Evaluation.classifier.detectionClassifier import DetectionClassifier
 from src.Evaluation.metrics import mAP, f1Score
+from src.eval_lib.evaluator import Evaluator
 from src.time_aware_exp.config.config import SortConfig
 from .tracker import SortTracker, MAX_AGE, MIN_HITS, IOU_THRESHOLD
 from .bbox_visualization import draw_detection_boxes, draw_tracker_boxes
@@ -57,13 +58,16 @@ class TrackerEvaluator:
         self.dataset = build_dataset(dataset_name=self.dataset_name, map_name=self.map_name)
         
         # 出力ディレクトリ作成
-        self.output_dir = DATASET_DIR / "tracker"
+        self.output_dir = DATASET_DIR / f"tracker/{dataset_name}/{map_name}"
         self.model_result_dir = self.output_dir / f"{model_name}"
         self.model_image_dir = self.model_result_dir / "images"
         self.model_label_dir = self.model_result_dir / "labels"
         self.tracker_result_dir = self.output_dir / f"{model_name}_tracker"
         self.tracker_image_dir = self.tracker_result_dir / "images"
         self.tracker_label_dir = self.tracker_result_dir / "labels"
+        # 補正前（predict直後）のラベル保存先
+        self.tracker_pred_result_dir = self.output_dir / f"{model_name}_tracker_pred"
+        self.tracker_pred_label_dir = self.tracker_pred_result_dir / "labels"
 
         self.output_dir.mkdir(parents=True, exist_ok=True) 
         self.model_result_dir.mkdir(parents=True, exist_ok=True)
@@ -72,6 +76,7 @@ class TrackerEvaluator:
         self.tracker_result_dir.mkdir(parents=True, exist_ok=True)
         self.tracker_image_dir.mkdir(parents=True, exist_ok=True)
         self.tracker_label_dir.mkdir(parents=True, exist_ok=True)
+        self.tracker_pred_label_dir.mkdir(parents=True, exist_ok=True)
         
         # モデルロード
         self.model = build_model(model_name=model_name, dataset=dataset_name, device="cuda")
@@ -115,8 +120,10 @@ class TrackerEvaluator:
             # 検出実行
             model_detections = self.model.predict(image_path)
             
-            # トラッキング更新
-            tracker_result = self.tracker.update(model_detections)
+            # トラッキング更新（tracked_boxes は従来の tracker_result と同じ意味）
+            tracking_result = self.tracker.update(model_detections)
+            tracker_result = tracking_result.tracked_boxes
+            tracker_predicted_result = tracking_result.predicted_boxes  # 補正前（predict直後）
             
             # 検出とトラッキングを組み合わせた結果
             combined_result, bbox_groups = self.integrator.execute({"model": model_detections, "tracking": tracker_result})
@@ -126,6 +133,7 @@ class TrackerEvaluator:
                 'image_path': image_path,
                 'model_detections': model_detections,
                 'tracker_result': tracker_result,
+                'tracker_predicted_result': tracker_predicted_result,
                 "bbox_groups": bbox_groups,
                 "combined_result": combined_result,
                 'gt_boxes': None
@@ -174,7 +182,7 @@ class TrackerEvaluator:
     def _save_labels(self, frame_idx: int, frame: dict, image_height: int, image_width: int):
         """
         フレーム毎のラベルをKITTI形式に近いテキストファイルとして保存する。
-        model / tracker をそれぞれ別ディレクトリに保存する。
+        model / tracker（補正後）/ tracker_pred（補正前）をそれぞれ別ディレクトリに保存する。
 
         DetectionBoundingBox は xCenter, yCenter, width, height（正規化 0-1 center形式）、
         classId, confidenceScore を持つ（ObjectDetector.py / tracker.py 参照）。
@@ -192,6 +200,7 @@ class TrackerEvaluator:
 
         write_boxes(frame["model_detections"], self.model_label_dir / filename)
         write_boxes(frame["tracker_result"], self.tracker_label_dir / filename)
+        write_boxes(frame["tracker_predicted_result"], self.tracker_pred_label_dir / filename)
 
     def _save_images(self, frame_idx: int, frame: dict, base_image: np.ndarray):
 
@@ -219,24 +228,16 @@ class TrackerEvaluator:
         """
         フェーズ 3: メトリクス計算と結果出力
         """
-        targetClassIdList = [0, 2, 9, 11]
-        
-        # モデルのメトリクス
-        model_mAP, model_ap_dict = mAP.computeMeanAP(
-            self.model_classified_boxes, targetClassIdList
+        evaluator = Evaluator(iou_threshold=IOU_THRESHOLD)
+        model_evaluation_result = evaluator.evaluate(
+            gt_dataset_dir=self.dataset.label_dir,
+            detection_dataset_dir=self.model_label_dir,
         )
-        model_f1, model_prec, model_rec = f1Score.computeF1Score(
-            self.model_classified_boxes
+
+        tracker_evaluation_result = evaluator.evaluate(
+            gt_dataset_dir=self.dataset.label_dir,
+            detection_dataset_dir=self.tracker_label_dir,
         )
-        
-        # Trackerのメトリクス
-        tracker_mAP, tracker_ap_dict = mAP.computeMeanAP(
-            self.tracker_classified_boxes, targetClassIdList
-        )
-        tracker_f1, tracker_prec, tracker_rec = f1Score.computeF1Score(
-            self.tracker_classified_boxes
-        )
-        
         
         jaccard = sum(list(calc_jaccard(self.frame_data[frame_idx]["bbox_groups"]) for frame_idx in self.frame_data.keys())) / len(self.frame_data)
 
@@ -249,12 +250,12 @@ class TrackerEvaluator:
                 writer.writerow(['Method', 'mAP', 'F1', 'Precision', 'Recall', 'Jaccard'])
             writer.writerow([
                 self.model_name,
-                f"{model_mAP:.4f}", f"{model_f1:.4f}", f"{model_prec:.4f}", f"{model_rec:.4f}",
+                f"{model_evaluation_result.mAP:.4f}", f"{model_evaluation_result.f1_score:.4f}", f"{model_evaluation_result.precision:.4f}", f"{model_evaluation_result.recall:.4f}",
                 ""
             ])
             writer.writerow([
                 f"{self.model_name}_tracker",
-                f"{tracker_mAP:.4f}", f"{tracker_f1:.4f}", f"{tracker_prec:.4f}", f"{tracker_rec:.4f}",
+                f"{tracker_evaluation_result.mAP:.4f}", f"{tracker_evaluation_result.f1_score:.4f}", f"{tracker_evaluation_result.precision:.4f}", f"{tracker_evaluation_result.recall:.4f}",
                 f"{jaccard:.4f}"
             ])
         
@@ -264,8 +265,8 @@ class TrackerEvaluator:
         print(f"{'='*60}")
         print(f"{'Method':<20} {'mAP':<12} {'F1':<12} {'Precision':<12} {'Recall':<12}")
         print(f"{'-'*60}")
-        print(f"{'Model':<20} {model_mAP:<12.4f} {model_f1:<12.4f} {model_prec:<12.4f} {model_rec:<12.4f}")
-        print(f"{'Tracker':<20} {tracker_mAP:<12.4f} {tracker_f1:<12.4f} {tracker_prec:<12.4f} {tracker_rec:<12.4f}")
+        print(f"{'Model':<20} {model_evaluation_result.mAP:<12.4f} {model_evaluation_result.f1_score:<12.4f} {model_evaluation_result.precision:<12.4f} {model_evaluation_result.recall:<12.4f}")
+        print(f"{'Tracker':<20} {tracker_evaluation_result.mAP:<12.4f} {tracker_evaluation_result.f1_score:<12.4f} {tracker_evaluation_result.precision:<12.4f} {tracker_evaluation_result.recall:<12.4f}")
         print(f"{'='*60}")
 
 

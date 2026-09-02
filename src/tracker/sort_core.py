@@ -5,6 +5,13 @@ SORT アルゴリズムのコア実装。
 オリジナル実装（Bewley et al. 2016）から可視化・デモ用コードを除去し、
 ライブラリとして使いやすい形に整理したもの。
 
+各トラックについて、以下の2状態を分けて保持・出力する。
+    1. predicted_bbox : 過去の状態から線形（等速モデル）で予測した状態
+                         （= 現在の検出で補正する前の状態）
+    2. updated_bbox   : 現在の検出で補正した後の状態
+                         （未マッチのフレームでは predicted_bbox と同一）
+`matched` フラグで、そのフレームで実際に検出とマッチしたかを示す。
+
 依存ライブラリ:
     pip install filterpy scipy
     # lap が入っていれば高速なハンガリアン法を使用（任意）
@@ -16,8 +23,23 @@ SORT アルゴリズムのコア実装。
 """
 
 from __future__ import annotations
+from dataclasses import dataclass
 import numpy as np
 from filterpy.kalman import KalmanFilter
+
+
+# ────────────────────────────────────────────
+# 出力データ構造
+# ────────────────────────────────────────────
+
+@dataclass
+class TrackedObject:
+    """1トラックの1フレーム分の出力。"""
+    track_id:       int
+    predicted_bbox: np.ndarray   # [x1, y1, x2, y2] 補正前（線形予測）
+    updated_bbox:   np.ndarray   # [x1, y1, x2, y2] 補正後（未マッチ時は predicted_bbox と同じ）
+    confidence:     float
+    matched:        bool         # このフレームで検出とマッチしたか
 
 
 # ────────────────────────────────────────────
@@ -171,8 +193,11 @@ class KalmanBoxTracker:
         self._history: list[np.ndarray] = []
         self.confidence_score = bbox[4] if len(bbox) > 4 else 1.0
 
+        # 生成直後は「予測」も初期検出位置そのもの
+        self.last_prediction = z_to_bbox(self.kf.x)
+
     def update(self, bbox: np.ndarray) -> None:
-        """検出結果でカルマンフィルタを更新する。"""
+        """現在の検出結果でカルマンフィルタを補正する（ステップ3: 補正後）。"""
         self.time_since_update = 0
         self._history = []
         self.hits       += 1
@@ -182,7 +207,8 @@ class KalmanBoxTracker:
 
     def predict(self) -> np.ndarray:
         """
-        1ステップ予測を進め、予測 bbox [x1, y1, x2, y2] を返す。
+        過去の状態から線形（等速モデル）で1ステップ予測を進める
+        （ステップ1・2: 補正前の予測状態を作成・保存）。
         スケールが負にならないようにガード付き。
         """
         if (self.kf.x[6] + self.kf.x[2]) <= 0:
@@ -197,16 +223,17 @@ class KalmanBoxTracker:
 
         pred_bbox = z_to_bbox(self.kf.x)
         self._history.append(pred_bbox)
+        self.last_prediction = pred_bbox  # 補正前の状態として保存
         return self._history[-1]
 
     def get_state(self) -> np.ndarray:
-        """現在の推定 bbox [x1, y1, x2, y2] を返す。"""
+        """現在の推定 bbox [x1, y1, x2, y2] を返す（マッチ済みなら補正後）。"""
         return z_to_bbox(self.kf.x)
-    
+
     def get_state_with_score(self) -> tuple[np.ndarray, float]:
         """現在の推定 bbox と confidence を返す。"""
         return z_to_bbox(self.kf.x), self.confidence_score
-    
+
     @classmethod
     def reset_count(cls) -> None:
         """IDカウンタをリセット（テスト・シーン切り替え用）"""
@@ -304,16 +331,16 @@ class Sort:
     def __init__(
         self,
         max_age:       int   = 1,
-        min_hits:      int   = 3,
-        iou_threshold: float = 0.3,
+        min_hits:      int   = 1,
+        iou_threshold: float = 0.5,
     ):
         self.max_age       = max_age
-        self.min_hits      = min_hits
-        self.iou_threshold = iou_threshold
-        self.trackers:     list[KalmanBoxTracker] = []
-        self.frame_count:  int = 0
+        self.min_hits       = min_hits
+        self.iou_threshold  = iou_threshold
+        self.trackers:      list[KalmanBoxTracker] = []
+        self.frame_count:   int = 0
 
-    def update(self, dets: np.ndarray = np.empty((0, 5))) -> np.ndarray:
+    def update(self, dets: np.ndarray = np.empty((0, 5))) -> list[TrackedObject]:
         """
         1フレーム分の検出結果でトラッカーを更新する。
         フレームに検出がない場合は np.empty((0, 5)) を渡す。
@@ -322,12 +349,13 @@ class Sort:
             dets: shape (M, 5) [[x1, y1, x2, y2, score], ...]
 
         Returns:
-            shape (K, 5) [[x1, y1, x2, y2, track_id], ...]
-            ※ min_hits 未満のトラックは含まれない
+            確立済み（hit_streak >= min_hits）トラックの TrackedObject のリスト。
+            マッチの有無に関わらず出力し、`matched` で区別する。
+            未マッチのトラックは predicted_bbox == updated_bbox になる。
         """
         self.frame_count += 1
 
-        # ── 予測フェーズ ──────────────────────────────────────
+        # ── 予測フェーズ（ステップ1・2: 補正前の状態を作成・保存） ─────
         trks = np.zeros((len(self.trackers), 5))
         to_del = []
         for t, trk_arr in enumerate(trks):
@@ -346,7 +374,7 @@ class Sort:
             dets, trks, self.iou_threshold
         )
 
-        # マッチしたトラックを更新
+        # マッチしたトラックを更新（ステップ3: 補正後の状態を保存）
         for m in matched:
             self.trackers[m[1]].update(dets[m[0], :])
 
@@ -355,21 +383,24 @@ class Sort:
             self.trackers.append(KalmanBoxTracker(dets[i, :]))
 
         # ── 出力フェーズ ──────────────────────────────────────
-        ret = []
+        ret: list[TrackedObject] = []
         i = len(self.trackers)
         for trk in reversed(self.trackers):
-            d = trk.get_state()[0]
-            conf = trk.confidence_score
             i -= 1
-            # min_hits に達した「確立済み」トラックのみ出力
-            confirmed = (trk.hit_streak >= self.min_hits) or (self.frame_count <= self.min_hits)
-            if (trk.time_since_update < 1) and confirmed:
-                ret.append(np.concatenate((d, [trk.id + 1, conf])).reshape(1, -1))
+            if trk.hit_streak >= self.min_hits:
+                updated_bbox, conf = trk.get_state_with_score()
+                ret.append(TrackedObject(
+                    track_id=trk.id + 1,
+                    predicted_bbox=trk.last_prediction[0],
+                    updated_bbox=updated_bbox[0],
+                    confidence=conf,
+                    matched=trk.time_since_update < 1,
+                ))
             # max_age を超えたトラックを削除
             if trk.time_since_update > self.max_age:
                 self.trackers.pop(i)
 
-        return np.concatenate(ret) if ret else np.empty((0, 6)) 
+        return ret
 
     def reset(self) -> None:
         """トラッカーをリセットする（シーン切り替え時など）。"""

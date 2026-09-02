@@ -37,6 +37,10 @@ class AdrodState(ABC):
     def exe_detection(self, ctx: StateContext, frame_ref: Any) -> FrameResult:
         pass
     
+    # @abstractmethod
+    # def calc_uncertainty(self):
+    #     pass
+    
     def calc_jaccard(self, bbox_groups: list[list[DetectionBoundingBox]]) -> float:
         if not bbox_groups:
             return 1.0
@@ -63,7 +67,7 @@ class SingleState(AdrodState):
             return ctx.state.process_cache(ctx, frame)
 
         return FrameResult(
-            detections=det_m1,
+            detections=result,
             state=1,
             flops=FLOPs_Dict[ctx.m1],
         )
@@ -126,9 +130,9 @@ class TwoState(AdrodState):
 
         if jaccard >= ctx.thresholds.theta_high:
             ctx.transition(SingleState())
-        elif jaccard <= ctx.thresholds.theta_low:
-            ctx.transition(ThreeState())
-            return ctx.state.exe_detection(ctx, input_image_path, det_m1, det_m2)
+        # elif jaccard <= ctx.thresholds.theta_low:
+        #     ctx.transition(ThreeState())
+        #     return ctx.state.exe_detection(ctx, input_image_path, det_m1, det_m2)
 
         return FrameResult(
             detections=result,

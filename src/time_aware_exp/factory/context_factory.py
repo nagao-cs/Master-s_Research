@@ -47,5 +47,6 @@ def build_context(cfg: AdrodConfig):
         m1=cfg.model_1,
         m2=cfg.model_2,
         m3=cfg.model_3,
+        max_version=cfg.max_version,
         initial_state=SingleState(),
     )

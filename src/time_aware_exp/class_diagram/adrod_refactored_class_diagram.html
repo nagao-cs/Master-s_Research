@@ -1,200 +1,253 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>time_aware_exp クラス図</title>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADROD Class Diagram (Fixed)</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.6/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+        mermaid.contentLoaded();
+    </script>
     <style>
-        body { font-family: Arial; margin: 20px; }
-        .mermaid { display: flex; justify-content: center; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            width: 95%;
+            max-width: 1400px;
+            overflow-x: auto;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
     </style>
 </head>
 <body>
-    <h1>time_aware_exp クラス図</h1>
-    <div class="mermaid">
+
+    <h1>ADROD システム クラス図</h1>
+    
+    <div class="container">
+        <div class="mermaid">
 classDiagram
-    %% ============ Main Entry ============
     class main {
-        +parse_args()
-        +build_runner()
         +main()
+        -parse_args()
+        -build_runner()
     }
-
-    %% ============ Runner Hierarchy ============
-    class BaseRunner {
-        #cfg
-        #base_dir
-        #cfg_path
-        +run()
-        #build_detection()*
-        #build_context()
-        #save_result()
-        #evaluate()
+    
+    class Path {
+        <<external>>
     }
-
-    class CacheRunner {
-        +build_detection()
-    }
-
-    class OnlineRunner {
-        +build_detection()
-    }
-
-    class CacheFrameSource {
-        +get(frame_idx)
-    }
-
-    class VideoFrameSource {
-        -cap
-        +get(frame_idx)
-    }
-
-    %% ============ State Pattern ============
-    class AdrodState {
-        +exe_detection(ctx, frame_ref)*
-    }
-
-    class SingleState {
-        +exe_detection(ctx, frame_ref)
-    }
-
-    class TwoState {
-        +exe_detection(ctx, frame_ref)
-        -_calc_jaccard(bbox_groups)
-    }
-
-    class ThreeState {
-        +exe_detection(ctx, frame_ref)
-    }
-
-    class StateContext {
-        -_detection: DetectionStrategy
+    
+    class AdrodConfig {
+        +map: str
+        +integrate_way: str
+        +model_1: str
+        +model_2: str
+        +model_3: str
+        +iou_threshold: int
         +thresholds: ThresholdConfig
-        +integrator
-        +tracker: SortTracker
-        +m1, m2, m3: str
-        +state: AdrodState
-        +process(frame_ref)
-        +detect(model, frame_ref)
-        +transition(next_state)
-        +reset()
+        +sort: SortConfig
     }
-
-    %% ============ Strategy Pattern ============
-    class DetectionStrategy {
-        +detect(model, frame_ref)*
-    }
-
-    class CacheDetectionStrategy {
-        -_cache: dict
-        +detect(model, frame_ref)
-    }
-
-    class ModelDetectionStrategy {
-        -_infer_fns: dict
-        +detect(model, frame_ref)
-    }
-
-    %% ============ Data Classes ============
-    class FrameInput {
-        +frame_idx: int
-        +image: ndarray | None
-    }
-
-    class FrameResult {
-        +detections: list[DetectionBoundingBox]
-        +state: int
-        +flops: float
-    }
-
+    
     class ThresholdConfig {
         +theta_high: float
         +theta_low: float
         +theta_track: float
+        +tau_p: float
     }
-
+    
     class SortConfig {
         +iou_threshold: float
         +max_age: int
         +min_hits: int
     }
-
-    class AdrodConfig {
-        +map: str
-        +integrate_way: str
-        +model_1, model_2, model_3: str
-        +iou_threshold: int
-        +thresholds: ThresholdConfig
-        +sort: SortConfig
+    
+    class BaseRunner {
+        #cfg: AdrodConfig
+        #base_dir: Path
+        #cfg_path: Path
+        +run()
+        #execute_detection()* 
+        #build_detection_source()*
+        #build_context()
+        #save_result()
+        #evaluate()
     }
-
-    %% ============ Other Components ============
-    class SortTracker {
-        -_cfg: SortConfig
-        -_sorters: dict
-        -_prev_track_ids: set
-        +update(detections)
-        +reset()
-        -_get_sorter(label)
+    
+    class CacheRunner {
+        +build_detection_source()
+        +execute_detection()
+        -DetectionCache
     }
-
-    class TrackingResult {
-        +lost_count: int
-        +new_count: int
-        +total_tracked: int
+    
+    class OnlineRunner {
+        +build_detection()
+        -VideoFrameSource
     }
-
+    
+    class DetectionCache {
+        -model_names: list[str]
+        -cache: list
+        -_load()
+    }
+    
+    class VideoFrameSource {
+        -cap: cv2.VideoCapture
+        +get()
+    }
+    
+    class FrameInput {
+        +frame_idx: int
+        +image: np.ndarray
+    }
+    
+    class StateContext {
+        -thresholds: ThresholdConfig
+        -integrator: Integrator
+        -tracker: SortTracker
+        -m1: str
+        -m2: str
+        -m3: str
+        -state: AdrodState
+        +process_cache()
+        +process()
+        +detect()
+        +transition()
+    }
+    
+    class AdrodState {
+        <<abstract>>
+        +process_cache()*
+        +exe_detection()*
+        +calc_jaccard()
+    }
+    
+    class SingleState {
+        +process_cache()
+        +exe_detection()
+    }
+    
+    class TwoState {
+        +process_cache()
+        +exe_detection()
+    }
+    
+    class ThreeState {
+        +process_cache()
+        +exe_detection()
+    }
+    
+    class FrameResult {
+        +detections: list[DetectionBoundingBox]
+        +state: int
+        +flops: float
+    }
+    
     class ExecutionRecorder {
         -detection_record: list
         -exe_state_record: list
         -total_flops: float
-        +record_frame_result(frame_result)
+        -yolov8n_cost: float
+        +record_frame_result()
         +get_detections()
+        +get_execution_states()
+        +get_total_flops()
         +get_statistics()
         +reset()
     }
-
-    %% ============ Relationships ============
     
-    main --> BaseRunner: creates
-
+    class SortTracker {
+        -_cfg: SortConfig
+        -_sorters: dict[str, Sort]
+        -_prev_track_ids: set[int]
+        +update()
+        +reset()
+        -_get_sorter()
+    }
+    
+    class DetectionBoundingBox {
+        <<external>>
+        +xCenter: float
+        +yCenter: float
+        +width: float
+        +height: float
+        +classId: str
+        +confidenceScore: float
+    }
+    
+    class Integrator {
+        <<external>>
+        +__call__()
+    }
+    
+    class Evaluator {
+        <<external>>
+        +evaluate()
+    }
+    
+    class FileWriter {
+        <<external>>
+        +write()
+    }
+    
+    main --> AdrodConfig 
+    main --> BaseRunner
+    main --> Path
+    
     BaseRunner <|-- CacheRunner
     BaseRunner <|-- OnlineRunner
-
-    CacheRunner --> CacheFrameSource
-    OnlineRunner --> VideoFrameSource
-
-    BaseRunner --> StateContext: builds via factory
-
-    BaseRunner --> ExecutionRecorder
     
-    StateContext --> AdrodState: uses
-    StateContext --> DetectionStrategy: uses
-    StateContext --> SortTracker: uses
-
+    BaseRunner --> StateContext
+    BaseRunner --> ExecutionRecorder
+    BaseRunner --> FileWriter
+    BaseRunner --> Evaluator
+    
+    CacheRunner --> DetectionCache
+    CacheRunner --> FrameInput
+    
+    OnlineRunner --> VideoFrameSource
+    
+    DetectionCache --> DetectionBoundingBox
+    VideoFrameSource --> FrameInput
+    
+    AdrodConfig --> ThresholdConfig
+    AdrodConfig --> SortConfig
+    
+    StateContext --> AdrodState/transitions
+    StateContext --> SortTracker
+    StateContext --> Integrator
+    StateContext --> DetectionBoundingBox
+    
     AdrodState <|-- SingleState
     AdrodState <|-- TwoState
     AdrodState <|-- ThreeState
-
-    SingleState --> TwoState: transition
-    TwoState --> SingleState: transition
-    TwoState --> ThreeState: transition
-
-    DetectionStrategy <|-- CacheDetectionStrategy
-    DetectionStrategy <|-- ModelDetectionStrategy
-
-    StateContext --> ThresholdConfig
-    StateContext --> AdrodConfig
-    StateContext --> TrackingResult: receives
-
-    SortTracker --> TrackingResult: returns
-    SortTracker --> SortConfig
-
-    ExecutionRecorder --> FrameResult: records
     
-    FrameInput --|> StateContext: passed to process
-    StateContext --|> FrameResult: returns
-    FrameResult --|> ExecutionRecorder: recorded
+    AdrodState --> FrameResult
+    
+    ExecutionRecorder --> FrameResult
+    ExecutionRecorder --> DetectionBoundingBox
+    
+    SortTracker --> DetectionBoundingBox
+    SortTracker --> SortConfig
+        </div>
     </div>
+
 </body>
 </html>

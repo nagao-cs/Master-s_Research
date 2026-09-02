@@ -39,9 +39,10 @@ class StateContext:
         thresholds:    ThresholdConfig,
         integrator:    Integrator,
         tracker:       SortTracker,
-        m1: str,
-        m2: str,
-        m3: str,
+        m1:            str,
+        m2:            str,
+        m3:            str,
+        max_version:   int,
         initial_state: AdrodState
     ) -> None:
         self.thresholds  = thresholds
@@ -50,6 +51,7 @@ class StateContext:
         self.m1 = m1
         self.m2 = m2
         self.m3 = m3
+        self.max_version = max_version
         self.state: AdrodState = initial_state
         
         self.models = {}
@@ -69,7 +71,7 @@ class StateContext:
         """必要なモデルを起動しておく"""
         from ..factory.detection_factory import build_single_model
         
-        for model_name in [self.m1, self.m2, self.m3]:
+        for model_name in [self.m1, self.m2, self.m3][:self.max_version]:
             if model_name not in self.models:
                 self.models[model_name] = build_single_model(model_name)
                 print(f"✓ Model '{model_name}' loaded")

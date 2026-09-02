@@ -9,7 +9,6 @@ class OnlineRunner(BaseRunner):
         return ImageDataset.build_from_config(self.cfg, self.base_dir)
 
     def execute_detection(self):
-        self.context.ready_model()
         for image_path in tqdm(iterable=self.dataset, total=len(self.dataset)):
             frame_result = self.context.process_image(image_path)
             self.recorder.record_frame_result(frame_result)

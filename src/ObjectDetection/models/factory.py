@@ -193,10 +193,10 @@ def build_model(model_name, dataset,device) -> Detector:
     else:
         raise ValueError(model_name)
 
-    # if not ("yolo" in model_name or "rtdetr" in model_name):
-    #     model.detections_per_img = 50
-    #     model.score_thresh = 0.25
-    #     model.nms_thresh = 0.3
+    if not ("yolo" in model_name or "rtdetr" in model_name):
+        model.detections_per_img = 50
+        model.score_thresh = 0.25
+        model.nms_thresh = 0.3
     if model is None:
         raise ValueError("something incorrect input")
     

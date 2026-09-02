@@ -16,7 +16,7 @@ from ..config import DATASET_DIR
 def get_ground_truth_dir(dataset: str, mapName: str) -> Path:
     """データセットに応じてGround Truthディレクトリを取得"""
     if dataset == "KITTI":
-        return Path("/mnt/d/kitti/tracking/labels/0020")
+        return Path(f"/mnt/d/kitti/tracking/labels/{mapName}")
     elif dataset == "CARLA":
         return Path(f"mnt/c/output/label/{mapName}/front")
     else:
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     model = build_model(model_name=modelName, dataset=dataset, device='cuda')
 
     if dataset == "KITTI":
-        input_image_dir = Path(f"/mnt/d/kitti/tracking/images/{args.map}")
+        input_image_dir = Path(f"/mnt/d/kitti/tracking/{args.map}/images/")
     elif dataset == "CARLA":
         input_image_dir =  Path(f"mnt/c/output/image/{mapName}/original/front")
 
@@ -74,6 +74,7 @@ if __name__ == "__main__":
     input_image_path_list: list[Path] = sorted(
         [input_image_path for input_image_path in input_image_dir.iterdir() if input_image_path.is_file()]
     )
+    print(input_image_path_list)
 
     # 計測開始
     start: float = time.time()
@@ -89,8 +90,8 @@ if __name__ == "__main__":
     executionTime: float = end - start
     print(f"\nTotal object detection time: {executionTime:.2f} seconds")
 
-    outputLabelDir = DATASET_DIR / f"single_model_detection/{dataset}/labels/{mapName}/{modelName}"
-    outputImageDir = DATASET_DIR / f"single_model_detection/{dataset}/images/{mapName}/{modelName}"
+    outputLabelDir = DATASET_DIR / f"single_model_detection/{dataset}/{mapName}/{modelName}/labels"
+    outputImageDir = DATASET_DIR / f"single_model_detection/{dataset}/{mapName}/{modelName}/images"
     os.makedirs(outputLabelDir, exist_ok=True)
     os.makedirs(outputImageDir, exist_ok=True)
 
@@ -155,7 +156,7 @@ if __name__ == "__main__":
     # -----------
     # 結果をCSVで保存
     # -----------
-    csv_output_dir = DATASET_DIR / f"single_model_detection/{dataset}/eval_result"
+    csv_output_dir = DATASET_DIR / f"single_model_detection/{dataset}/{mapName}/eval_result"
     os.makedirs(csv_output_dir, exist_ok=True)
     
     csv_path = csv_output_dir / "results.csv"

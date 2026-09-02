@@ -109,7 +109,7 @@ def buildDetectionModelDict(
     mapName: str,
     modelNames: list[str],
     imageId: str,
-    resultRoot: Path,
+    resultRoot: Path, # /mnt/d/dataset
 ) -> dict[str, list[DetectionBoundingBox]]:
     """
     1画像分の検出結果を {model_name: [DetectionBoundingBox, ...]} の形で構築する
@@ -117,13 +117,14 @@ def buildDetectionModelDict(
     ここではmodel名の文字列をそのままkeyとして利用する
     """
     detectionModelDict: dict[str, list[DetectionBoundingBox]] = {}
-
     for modelName in modelNames:
-        filePath = os.path.join(
-            resultRoot, dataset, mapName, modelName, "labels", f"{imageId}.txt"
-        )
-        detectionModelDict[modelName] = loadDetectionFile(filePath)
-
+        if "tracker" in modelName:
+            filePath = resultRoot / "tracker" / dataset / mapName / modelName / "labels" / f"{imageId}.txt"
+        else:
+            filePath = resultRoot / "single_model_detection" / dataset / mapName / f"{modelName}" / "labels" / f"{imageId}.txt"
+        if not filePath.exists():
+            raise FileNotFoundError(f"{filePath} does not exist")
+        detectionModelDict[modelName] = loadDetectionFile(str(filePath))
     return detectionModelDict
 
 
@@ -134,6 +135,7 @@ def buildDetectionModelDict(
 def isAgreeGroup(group: list[BoundingBox]) -> bool:
     """
     グループ内boxが複数(=複数モデルが一致)であれば一致、単一なら不一致
+    len(group) > 1ならそのグループは一致としてtrueを返す
     """
     return len(group) > 1
 
@@ -241,11 +243,17 @@ class AgreeErrorStats:
 
     @property
     def agreeErrorRate(self) -> float:
+        """
+        agree bboxの総数(tp + fp)に対するfpの割合
+        """
         total = self.agreeTp + self.agreeFp
         return self.agreeFp / total if total > 0 else float("nan")
 
     @property
     def disagreeErrorRate(self) -> float:
+        """
+        disagree bboxの総数(tp + fp)に対するfpの割合
+        """
         total = self.disagreeTp + self.disagreeFp
         return self.disagreeFp / total if total > 0 else float("nan")
 
@@ -285,7 +293,6 @@ def processImage(
         gtRoot, dataset, "tracking", mapName, "labels", f"{imageId}.txt"
     )
     groundTruthBoxes = loadGroundTruthFile(gtFilePath)
-    print(groundTruthBoxes)
 
     representativeBoxes = [computeRepresentativeBox(group) for group in groups]
     isTpFlags = matchGroupsToGroundTruth(
@@ -318,7 +325,7 @@ def run(
     dataset, mapName配下の全画像について一致/不一致のエラー率を集計する
     """
     labelsDirForIdList = os.path.join(
-        resultRoot, dataset, mapName, modelNames[0], "labels"
+        resultRoot, "single_model_detection", dataset, mapName, modelNames[0], "labels"
     )
     imageIds = getImageIdList(labelsDirForIdList)
     stats = AgreeErrorStats()
@@ -353,7 +360,7 @@ def saveRecordsToCsv(records: list[GroupRecord], outputPath: str) -> None:
                 [r.imageId, r.groupSize, r.agree, r.isTp, r.classId, r.confidenceScore]
             )
 
-from src.config import KITTI_ROOT, DATASET_DIR, IOU_THRESHOLD
+from src.config import KITTI_ROOT, RESULT_DIR, IOU_THRESHOLD
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="一致/不一致検出のエラー率比較")
     parser.add_argument("--dataset", required=True, help="例: kitti")
@@ -366,6 +373,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     
+    from src.config import DATASET_DIR
     print(f"model: {args.models}, dataset: {args.dataset}, map: {args.map}")
     result_root = Path("/mnt/d/dataset/single_model_detection/")
     stats, records = run(
@@ -374,17 +382,17 @@ if __name__ == "__main__":
         modelNames=args.models,
         groupingIouThreshold=IOU_THRESHOLD,
         matchIouThreshold=IOU_THRESHOLD,
-        resultRoot=result_root,
+        resultRoot=DATASET_DIR,
         gtRoot=args.gtRoot,
     )
 
     print(stats.summary())
     from datetime import datetime
-    from pathlib import Path as _Path
+    from pathlib import Path
 
     # summary と per-model ファイル名はモデル名をソートして決定
     model_key = "_".join(sorted(args.models))
-    summary_dir = DATASET_DIR / "agree_error_relation"
+    summary_dir = RESULT_DIR / "agree_error_relation"
     summary_dir.mkdir(parents=True, exist_ok=True)
 
     summary_path = summary_dir / "summary.csv"

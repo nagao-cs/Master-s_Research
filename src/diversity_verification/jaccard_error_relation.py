@@ -40,7 +40,7 @@ from src.diversity_verification.agree_error_relation import (
     buildDetectionModelDict,
     computeRepresentativeBox,
 )
-from src.config import DATASET_DIR, IOU_THRESHOLD, KITTI_ROOT
+from src.config import RESULT_DIR, IOU_THRESHOLD, DATASET_DIR
 
 # ------------------------------------------------------------
 # フレーム単位のエラー分類
@@ -55,6 +55,8 @@ class FrameErrorCounts:
     commonFnCount: int = 0
     oneModelFnCount: int = 0
     oneModelFpCount: int = 0
+    commonTpCount: int = 0
+    oneModelTpCount: int = 0
  
     @property
     def commonErrorCount(self) -> int:
@@ -112,7 +114,7 @@ def classifyFrame(
  
     representativeBoxes = [computeRepresentativeBox(group) for group in groups]
  
-    # agree_error_relationと同じ方針: confidence降順に貪欲マッチング
+    # confidence降順に貪欲マッチング
     order = sorted(
         range(len(groups)),
         key=lambda i: representativeBoxes[i].confidenceScore,
@@ -140,7 +142,10 @@ def classifyFrame(
             if len(group) == 1:
                 # 片方のモデルだけが検出しGTと一致 -> もう片方はこの物体を見逃した
                 counts.oneModelFnCount += 1
+                counts.oneModelTpCount += 1
             # len==2なら両モデルとも正しく検出(TP) -> エラーではない
+            elif len(group) == 2:
+                counts.commonTpCount += 1
         else:
             if len(group) == 2:
                 # 両モデルが同じ非存在物体を検出 -> 共通FP
@@ -163,7 +168,7 @@ def run(
     dataset: str,
     mapName: str,
     modelNames: list[str],
-    resultRoot: Path,
+    dataset_root: Path,
     groupingIouThreshold: float,
     matchIouThreshold: float,
     gtRoot: str,
@@ -171,25 +176,17 @@ def run(
     if len(modelNames) != 2:
         raise ValueError("jaccard_error_relationは2モデルの比較")
  
-    labelsDirForIdList = Path(resultRoot) / dataset / mapName / modelNames[0] / "labels"
+    labelsDirForIdList = Path(dataset_root) / "single_model_detection" /dataset / mapName / modelNames[0] / "labels"
     imageIds = getImageIdList(str(labelsDirForIdList))
  
     frameRecords: list[FrameErrorCounts] = []
- 
     for imageId in imageIds:
         detectionModelDict = buildDetectionModelDict(
-            dataset, mapName, modelNames, imageId, resultRoot
+            dataset, mapName, modelNames, imageId, dataset_root
         )
- 
-        # 両モデルとも検出無しならスキップ
-        # if all(len(boxes) == 0 for boxes in detectionModelDict.values()):
-            # continue
- 
+    
         gtFilePath = Path(gtRoot) / dataset / "tracking" / mapName / "labels" / f"{imageId}.txt"
-        # print(gtFilePath)
         groundTruthBoxes = loadGroundTruthFile(str(gtFilePath))
-        # print(groundTruthBoxes)
- 
         counts = classifyFrame(
             imageId=imageId,
             detectionModelDict=detectionModelDict,
@@ -210,6 +207,7 @@ def saveFrameRecordsToCsv(frameRecords: list[FrameErrorCounts], outputPath: Path
             "imageId", "jaccard",
             "totalGtCount", "commonFpCount", "commonFnCount",
             "oneModelFnCount", "oneModelFpCount",
+            "commonTpCount",
             "maxErrorCount", "minErrorCount",
             "maxErrorRate", "minErrorRate",
         ])
@@ -218,6 +216,7 @@ def saveFrameRecordsToCsv(frameRecords: list[FrameErrorCounts], outputPath: Path
                 r.imageId, f"{r.jaccard:.6f}",
                 r.totalGtCount, r.commonFpCount, r.commonFnCount,
                 r.oneModelFnCount, r.oneModelFpCount,
+                r.commonTpCount,
                 r.maxErrorCount, r.minErrorCount,
                 f"{r.maxErrorRate:.6f}", f"{r.minErrorRate:.6f}",
             ])
@@ -255,8 +254,7 @@ def plotJaccardVsMetrics(
     binWidth: float = 0.1,
 ) -> None:
     """
-    frameRecordsを平均化せず、jaccardを横軸、各項目を縦軸にしたグラフを保存する
-    jaccardは見やすさのためbinWidth刻み(既定0.1)でグループ化する
+    jaccardを横軸、各項目を縦軸にしたグラフを保存する
     各項目につき
       ・散布図(binごとにx方向へ少しジッターさせた全フレームの生データ)
       ・binごとにグループ化した箱ひげ図
@@ -366,6 +364,7 @@ def summarize(frameRecords: list[FrameErrorCounts]) -> dict:
     commonFn = sum(r.commonFnCount for r in frameRecords)
     oneModelFn = sum(r.oneModelFnCount for r in frameRecords)
     oneModelFp = sum(r.oneModelFpCount for r in frameRecords)
+    commonTpCount = sum(r.commonTpCount for r in frameRecords)
  
     maxErrorCount = commonFp + commonFn + oneModelFn + oneModelFp
     minErrorCount = commonFp + commonFn
@@ -385,6 +384,7 @@ def summarize(frameRecords: list[FrameErrorCounts]) -> dict:
         "oneModelFpCount": oneModelFp,
         "maxErrorCount": maxErrorCount,
         "minErrorCount": minErrorCount,
+        "commonTpCount": commonTpCount,
         "maxErrorRate": maxErrorCount / totalUnit if totalUnit > 0 else float("nan"),
         "minErrorRate": minErrorCount / totalUnit if totalUnit > 0 else float("nan"),
     }
@@ -403,13 +403,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
  
     print(f"models: {args.models}, dataset: {args.dataset}, map: {args.map}")
-    result_root = Path("/mnt/d/dataset/single_model_detection/")
  
     frameRecords = run(
         dataset=args.dataset,
         mapName=args.map,
         modelNames=args.models,
-        resultRoot=result_root,
+        dataset_root=DATASET_DIR,
         groupingIouThreshold=IOU_THRESHOLD,
         matchIouThreshold=IOU_THRESHOLD,
         gtRoot=args.gtRoot,
@@ -423,7 +422,7 @@ if __name__ == "__main__":
     )
  
     model_key = "_".join(sorted(args.models))
-    out_dir = DATASET_DIR / "jaccard_error_relation"
+    out_dir = RESULT_DIR / "jaccard_error_relation"
     out_dir.mkdir(parents=True, exist_ok=True)
  
     per_frame_csv = out_dir / f"{model_key}_{args.dataset}_{args.map}.csv"
@@ -440,6 +439,7 @@ if __name__ == "__main__":
         "common_fp", "common_fn", "one_model_fn", "one_model_fp",
         "max_error_count", "min_error_count",
         "max_error_rate", "min_error_rate",
+        "common_tp"
     ]
     file_exists = summary_path.exists()
     with open(summary_path, "a", newline="") as sf:
@@ -460,6 +460,7 @@ if __name__ == "__main__":
             "min_error_count": summary["minErrorCount"],
             "max_error_rate": summary["maxErrorRate"],
             "min_error_rate": summary["minErrorRate"],
+            "common_tp": summary["commonTpCount"]
         })
  
     print(f"Per-frame records saved: {per_frame_csv}")

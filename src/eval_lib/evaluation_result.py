@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Optional
 
 @dataclass
 class EvaluationResult:
@@ -9,3 +9,5 @@ class EvaluationResult:
     f1_score: float
     precision: float
     recall: float
+    cov_od: Optional[float] = None   # version_detections を渡したときだけ計算
+    cer_od: Optional[float] = None

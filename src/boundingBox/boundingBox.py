@@ -73,6 +73,11 @@ class BoundingBox(ABC):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         return image
 
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, BoundingBox):
+            return NotImplemented
+
+        return (self.classId == other.classId) and (self.xCenter == other.xCenter) and (self.yCenter == other.yCenter) and (self.width == other.width) and (self.height == other.height)
 
 class DetectionBoundingBox(BoundingBox):
     def __init__(self, xCenter: float, yCenter: float, width: float, height: float, classId: int, confidenceScore: float):

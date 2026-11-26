@@ -12,6 +12,7 @@ from src.boundingBox.integrator.majorityIntegrator import MajorityIntegrator
 from src.boundingBox.integrator.affirmativeIntegrator import ConfidenceBaseIntegrator
 from src.boundingBox.boundingBox import DetectionBoundingBox
 from src.eval_lib.evaluator import Evaluator
+from src.eval_lib.result_csv import ap_values, append_row, target_class_ids
 from .models.ObjectDetector import Detector
 from ..config import DATASET_DIR
 
@@ -19,7 +20,7 @@ from ..config import DATASET_DIR
 def get_ground_truth_dir(dataset: str, mapName: str) -> Path:
     """データセットに応じてGround Truthディレクトリを取得"""
     if dataset == "KITTI":
-        return Path(f"/mnt/d/kitti/tracking/labels/{mapName}")
+        return Path(f"/mnt/d/kitti/tracking/{mapName}/labels/")
     elif dataset == "CARLA":
         return Path(f"mnt/c/output/label/{mapName}/front")
     else:
@@ -101,11 +102,13 @@ if __name__ == "__main__":
     models: dict[str, Detector] = load_models(modelNameList, dataset=args.dataset)
 
     if dataset == "KITTI":
-        input_image_dir = Path(f"/mnt/d/kitti/tracking/images/{args.map}")
+        input_image_dir = Path(f"/mnt/d/kitti/tracking/{args.map}/images/")
     elif dataset == "CARLA":
         input_image_dir = Path(f"mnt/c/output/image/{mapName}/original/front")
 
     outputDetectionList: list[list[DetectionBoundingBox]] = list()
+    # フレームごとの各モデルの統合前の検出結果（Cov_OD / Cer_OD 用）
+    versionDetectionList: list[list[list[DetectionBoundingBox]]] = list()
 
     print(f"Dataset: {dataset}")
     print(f"Map: {mapName}")
@@ -136,6 +139,7 @@ if __name__ == "__main__":
 
         integratedBoundingBoxList, _ = integrator(modelDict)
         outputDetectionList.append(integratedBoundingBoxList)
+        versionDetectionList.append(list(modelDict.values()))
 
     # 計測終了
     end: float = time.time()
@@ -169,7 +173,7 @@ if __name__ == "__main__":
                 confidenceScore = boundingBox.confidenceScore
                 outputFile.write(
                     f"{classId} {xCenter} {yCenter} {width} {height} {confidenceScore}\n")
-        cv2.imwrite(filename=str(outputImagePath), img=outputImage)
+        # cv2.imwrite(filename=str(outputImagePath), img=outputImage)
         index += 1
 
     print(f"✓ Results saved to: {outputLabelDir}")
@@ -190,6 +194,8 @@ if __name__ == "__main__":
             evaluation_result = evaluator.evaluate(
                 gt_dataset_dir=ground_truth_dir,
                 detection_dataset_dir=outputLabelDir,
+                target_class_ids=target_class_ids(dataset),
+                version_detections=versionDetectionList,
             )
 
             print("\n" + "="*60)
@@ -199,6 +205,8 @@ if __name__ == "__main__":
             print(f"F1 Score:  {evaluation_result.f1_score:.4f}")
             print(f"Precision: {evaluation_result.precision:.4f}")
             print(f"Recall:    {evaluation_result.recall:.4f}")
+            print(f"Cov_OD:    {evaluation_result.cov_od:.4f}")
+            print(f"Cer_OD:    {evaluation_result.cer_od:.4f}")
             print(f"Time:      {executionTime:.2f}s")
             print("="*60 + "\n")
 
@@ -214,42 +222,28 @@ if __name__ == "__main__":
 
     csv_path = csv_output_dir / "results.csv"
 
-    # CSVファイルが存在しない場合はヘッダーを書き込む
-    file_exists = csv_path.exists()
+    row = {
+        'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'dataset': dataset,
+        'models': modelsTag,
+        'integrate_way': integrate_way,
+        'map': mapName,
+    }
+    if evaluation_result:
+        row.update({
+            'mAP': f"{evaluation_result.mAP:.4f}",
+            'F1_Score': f"{evaluation_result.f1_score:.4f}",
+            'Precision': f"{evaluation_result.precision:.4f}",
+            'Recall': f"{evaluation_result.recall:.4f}",
+            'Cov_OD': f"{evaluation_result.cov_od:.4f}",
+            'Cer_OD': f"{evaluation_result.cer_od:.4f}",
+            **{k: f"{v:.4f}" for k, v in ap_values(dataset, evaluation_result).items()},
+        })
+    else:
+        row.update({k: 'N/A' for k in ['mAP', 'F1_Score', 'Precision', 'Recall', 'Cov_OD', 'Cer_OD']})
+    row['Execution_Time_s'] = f"{executionTime:.2f}"
 
-    with open(csv_path, 'a', newline='') as csvfile:
-        fieldnames = ['timestamp', 'dataset', 'models', 'integrate_way', 'map',
-                      'mAP', 'F1_Score', 'Precision', 'Recall', 'Execution_Time_s']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-        if not file_exists:
-            writer.writeheader()
-
-        if evaluation_result:
-            writer.writerow({
-                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'dataset': dataset,
-                'models': modelsTag,
-                'integrate_way': integrate_way,
-                'map': mapName,
-                'mAP': f"{evaluation_result.mAP:.4f}",
-                'F1_Score': f"{evaluation_result.f1_score:.4f}",
-                'Precision': f"{evaluation_result.precision:.4f}",
-                'Recall': f"{evaluation_result.recall:.4f}",
-                'Execution_Time_s': f"{executionTime:.2f}"
-            })
-        else:
-            writer.writerow({
-                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'dataset': dataset,
-                'models': modelsTag,
-                'integrate_way': integrate_way,
-                'map': mapName,
-                'mAP': 'N/A',
-                'F1_Score': 'N/A',
-                'Precision': 'N/A',
-                'Recall': 'N/A',
-                'Execution_Time_s': f"{executionTime:.2f}"
-            })
+    # 既存の results.csv に Cov_OD などの列がなければ列を足して書き直す
+    append_row(csv_path, row)
 
     print(f"✓ Evaluation results saved to: {csv_path}")

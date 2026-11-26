@@ -6,7 +6,6 @@ class FileReader:
     def __init__(self):
         pass
     
-    def read_gt
 def convertGroundTruthFileToBoundingBoxList(groundTruthFilePath: str) -> list[GroundTruthBoundingBox]:
     groundTruthBoundingBoxList: list[GroundTruthBoundingBox] = list()
 

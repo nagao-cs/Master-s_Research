@@ -44,7 +44,15 @@ class SortTracker:
     confidenceScore は SORT が保持する値をそのまま使う。
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        max_age: int = MAX_AGE,
+        min_hits: int = MIN_HITS,
+        iou_threshold: float = IOU_THRESHOLD,
+    ):
+        self._max_age = max_age
+        self._min_hits = min_hits
+        self._iou_threshold = iou_threshold
         self._sorters: dict[str, Sort] = {}
         self._prev_track_ids: set[int] = set()
 
@@ -109,9 +117,9 @@ class SortTracker:
     def _get_sorter(self, label: str) -> Sort:
         if label not in self._sorters:
             self._sorters[label] = Sort(
-                max_age=MAX_AGE,
-                min_hits=MIN_HITS,
-                iou_threshold=IOU_THRESHOLD,
+                max_age=self._max_age,
+                min_hits=self._min_hits,
+                iou_threshold=self._iou_threshold,
             )
         return self._sorters[label]
 
@@ -123,6 +131,8 @@ class SortTracker:
     ) -> list[DetectionBoundingBox]:
         boxes = []
         for t in tracks:
+            if SortTracker._is_mostly_out_of_frame(t):
+                continue
             x1, y1, x2, y2 = t.predicted_bbox if use_predicted else t.updated_bbox
             boxes.append(
                 DetectionBoundingBox(
@@ -135,3 +145,32 @@ class SortTracker:
                 )
             )
         return boxes
+
+    @staticmethod
+    def _is_mostly_out_of_frame(
+        t: TrackedObject,
+        min_visible_ratio: float = 0.5,
+    ) -> bool:
+        x1, y1, x2, y2 = t.predicted_bbox
+
+        # bbox全体の面積
+        width = max(0.0, x2 - x1)
+        height = max(0.0, y2 - y1)
+        area = width * height
+
+        if area <= 0:
+            return True
+
+        # 画面内にクリップ
+        ix1 = max(0.0, x1)
+        iy1 = max(0.0, y1)
+        ix2 = min(1.0, x2)
+        iy2 = min(1.0, y2)
+
+        visible_width = max(0.0, ix2 - ix1)
+        visible_height = max(0.0, iy2 - iy1)
+        visible_area = visible_width * visible_height
+
+        visible_ratio = visible_area / area
+
+        return visible_ratio < min_visible_ratio

@@ -8,4 +8,6 @@ FLOPs_Dict = {
     "retinanet": 152.24,
     "fcos": 128.21,
     "fastrcnn": 280.37,
+    "fasterrcnn": 280.37,  # build_model のモデル名
+    "rtdetr_torch": 60
 }

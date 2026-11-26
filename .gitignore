@@ -30,6 +30,7 @@ __pycache__/
 *.csv
 *.jpg
 *.txt
+*:Zone*
 
 
 # -----------
@@ -40,6 +41,8 @@ __pycache__/
 /evaluationEnv
 /nuScenes-env
 /new-carla-env
+.detection-env
+.git
 
 # -----------
 # データセット系

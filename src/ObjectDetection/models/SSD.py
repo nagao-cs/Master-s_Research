@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-from torchvision.models.detection import fcos_resnet50_fpn, FCOS_ResNet50_FPN_Weights
 
 from .ObjectDetector import Detector, BBoxFormat
 

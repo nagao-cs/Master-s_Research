@@ -8,6 +8,7 @@ from ..executionRecorder        import ExecutionRecorder
 from ..data.dataset             import BaseDataset
 from src.file_lib.file_writer   import FileWriter
 from src.eval_lib.evaluator     import Evaluator
+from src.eval_lib.result_csv    import ap_values, target_class_ids
 
 
 class BaseRunner:
@@ -63,43 +64,49 @@ class BaseRunner:
         print(f"State distribution : {state_distribution}")
         print(f"Cost               : {stats['flops_cost']:.2f}x YOLOv8n")
         
+        print(f"Cov_OD             : {self.result.cov_od}")
+        print(f"Cer_OD             : {self.result.cer_od}")
+
+        # 評価対象クラスの AP をすべて書く（GT が 1 つもないクラスは nan）
+        aps = ap_values(self.cfg.dataset, self.result)
+
         with open(csv_path, "w", newline="") as csv_file:
             writer = csv.writer(csv_file)
             writer.writerow([
-                "F1", "prec", "rec", 
-                "mAP", 'AP_pedestrian', 'AP_vehicle', 'AP_traffic_light', 'AP_traffic_sign',
+                "F1", "prec", "rec",
+                "mAP", *aps.keys(),
+                "Cov_OD", "Cer_OD",
                 "exe_time", "state_1", "state_2", "state_3", "cost"
             ])
             writer.writerow([
-                self.result.f1_score, 
-                self.result.precision, 
-                self.result.recall, 
-                self.result.mAP, 
-                self.result.class_ap_dict.get(0, 0), 
-                self.result.class_ap_dict.get(2, 0), 
-                self.result.class_ap_dict.get(9, 0), 
-                self.result.class_ap_dict.get(11, 0), 
-                self.recorder.get_execution_time(), 
-                state_distribution.get(1, 0), 
-                state_distribution.get(2, 0), 
-                state_distribution.get(3, 0), 
+                self.result.f1_score,
+                self.result.precision,
+                self.result.recall,
+                self.result.mAP,
+                *aps.values(),
+                self.result.cov_od,
+                self.result.cer_od,
+                self.recorder.get_execution_time(),
+                state_distribution.get(1, 0),
+                state_distribution.get(2, 0),
+                state_distribution.get(3, 0),
                 stats["flops_cost"]
             ])
-        
 
     def evaluate(self):
         output_dir = self.cfg_path.parent / "result"
-        
-        if self.cfg.dataset == "KITTI":
-            target_class_ids = [0, 2]
-        else :
-            target_class_ids = [0, 2, 9, 11]
+
+        # 各フレームで実行したモデルの統合前の検出結果（全フレームそろっているときだけ Cov_OD / Cer_OD を計算）
+        version_detections = [list(v.values()) for v in self.recorder.get_version_detections()]
+        if not version_detections or not all(version_detections):
+            version_detections = None
 
         evaluator = Evaluator(iou_threshold=self.cfg.iou_threshold)
         result = evaluator.evaluate(
             gt_dataset_dir=self.dataset.gt_dir,
             detection_dataset_dir=output_dir,
-            target_class_ids=target_class_ids
+            target_class_ids=target_class_ids(self.cfg.dataset),
+            version_detections=version_detections,
         )
 
         self.result = result

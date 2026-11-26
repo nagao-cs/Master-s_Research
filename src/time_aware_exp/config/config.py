@@ -13,7 +13,7 @@ class ThresholdConfig:
     theta_high: float   # Jaccard係数がこれ以上でTwo→Single
     theta_low:  float   # Jaccard係数がこれ未満でTwo→Three
     theta_track: float  # トラッキング不確実性がこれ以上でSingle→Two
-    # tau_p: float        # conf_baseの採用閾値
+    tau_p: float        # conf_baseの採用閾値
 
 
 @dataclass

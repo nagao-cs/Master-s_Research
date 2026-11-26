@@ -161,8 +161,28 @@ def build_yolov5n(dataset, device):
 from .rtDETR import RTDETRDetector
 def build_kitti_rtdetr(device):
     model = KITTI_ULTRALYTICS_WEIGHTS_DIR / "rtdetr_kitti/weights/best.pt"
-
     return RTDETRDetector(model)
+
+from src.kitti.kitti_train.rtdetr_hf import RTDETRv2Wrapper
+from .RTDETR_Torch import RTDETRTorchDetector
+def build_kitti_rtdetr_torch(device):
+    model = RTDETRv2Wrapper(num_classes=KITTI_NUM_CLASS, score_thresh=0.25)
+    state_dict = torch.load(
+        KITTI_WEIGHTS_DIR + "rtdetrv2_s_best.pth",
+        map_location=device
+    )
+    model.load_state_dict(state_dict)
+    model.to(device).eval()
+
+    return RTDETRTorchDetector(model)
+def build_carla_rtdetr_torch(device):
+    pass
+def build_rtdetr_torch(dataset, device):
+    if dataset == "KITTI":
+        return build_kitti_rtdetr_torch(device)
+    elif dataset == "CARLA":
+        return build_carla_rtdetr_torch(device)
+
 def build_carla_rtdetr(device):
     pass
 def build_rtdetr(dataset, device):
@@ -190,10 +210,12 @@ def build_model(model_name, dataset,device) -> Detector:
         model = build_rtdetr(dataset, device)
     elif model_name == "yolov5n":
         model = build_yolov5n(dataset, device)
+    elif model_name == "rtdetr_torch":
+        model = build_rtdetr_torch(dataset, device)
     else:
         raise ValueError(model_name)
 
-    if not ("yolo" in model_name or "rtdetr" in model_name):
+    if not ("yolo" in model_name or "rtdetr_torch" in model_name):
         model.detections_per_img = 50
         model.score_thresh = 0.25
         model.nms_thresh = 0.3

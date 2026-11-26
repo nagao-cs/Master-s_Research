@@ -11,6 +11,9 @@ KITTI_NUM_CLASS = 9
 KITTI_IMAGE_WIDTH = 1242
 KITTI_IMAGE_HEIGHT = 375
 
+ERROR_ESTIMATE_EXP_ROOT = PROJECT_ROOT / "src" / "error_estimate_exp"
+
+
 DATASET_DIR = Path("/mnt/d/dataset")
 RESULT_DIR = Path("/mnt/d/result")
 

@@ -71,7 +71,9 @@ def build_model(model_name, num_classes):
 
     elif model_name == "ssd":
         return build_ssd(num_classes)
-
+    elif model_name == "rtdetrv2_s":
+        from rtdetr_hf import RTDETRv2Wrapper
+        return RTDETRv2Wrapper(num_classes)
     else:
         raise ValueError(model_name)
 
@@ -134,12 +136,20 @@ if __name__ == '__main__':
     args = argparser.parse_args()
 
     model = build_model(model_name=args.model, num_classes=9)
-    optimizer = torch.optim.SGD(
-        model.parameters(),
-        lr=0.001,   
-        momentum=0.9,
-        weight_decay=0.0005,
-    )
+    if args.model == "rtdetrv2_s":
+        backbone = [p for n, p in model.named_parameters() if "backbone" in n]
+        others = [p for n, p in model.named_parameters() if "backbone" not in n]
+        optimizer = torch.optim.AdamW(
+            [{"params": backbone, "lr": 1e-5}, {"params": others}],
+                lr=1e-4, weight_decay=1e-4,
+        )
+    else:
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=0.001,   
+            momentum=0.9,
+            weight_decay=0.0005,
+        )
     device = "cuda"
     model.to(device)
 
@@ -175,8 +185,10 @@ if __name__ == '__main__':
                 for k, v in loss_dict.items():
                     print(f"  {k}: {v.item()}")
                 continue
-            
+            optimizer.zero_grad()
             scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.1)
             scaler.step(optimizer)
             scaler.update()
             if epoch == 0:

@@ -7,7 +7,7 @@ AdROD の State パターン実装。
 """
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, TYPE_CHECKING
 
 from src.boundingBox.boundingBox import DetectionBoundingBox
@@ -24,6 +24,8 @@ class FrameResult:
     detections: list[DetectionBoundingBox]
     state:      int # num_version
     flops:      float
+    # このフレームで実行した各モデルの統合前の検出結果（Cov_OD / Cer_OD の計算に使う）
+    version_detections: dict[str, list[DetectionBoundingBox]] = field(default_factory=dict)
 
 
 # ── State 基底クラス ─────────────────────────────────────────
@@ -70,6 +72,7 @@ class SingleState(AdrodState):
             detections=result,
             state=1,
             flops=FLOPs_Dict[ctx.m1],
+            version_detections={ctx.m1: det_m1},
         )
 
     def exe_detection(self, ctx: StateContext, input_image_path) -> FrameResult:
@@ -87,6 +90,7 @@ class SingleState(AdrodState):
             detections=result,
             state=1,
             flops=FLOPs_Dict[ctx.m1],
+            version_detections={ctx.m1: det_m1},
         )
 
 
@@ -115,6 +119,7 @@ class TwoState(AdrodState):
             detections=result,
             state=2,
             flops=FLOPs_Dict[ctx.m1] + FLOPs_Dict[ctx.m2],
+            version_detections=dets,
         )
     
     def exe_detection(self, ctx: StateContext, input_image_path, det_m1=None) -> FrameResult:
@@ -138,6 +143,7 @@ class TwoState(AdrodState):
             detections=result,
             state=2,
             flops=FLOPs_Dict[ctx.m1] + FLOPs_Dict[ctx.m2],
+            version_detections=dets,
         )
 
 # ── ENSEMBLE 状態 ────────────────────────────────────────────
@@ -161,6 +167,7 @@ class ThreeState(AdrodState):
             detections=result,
             state=3,
             flops=FLOPs_Dict[ctx.m1] + FLOPs_Dict[ctx.m2],
+            version_detections=dets,
         )
         
     def exe_detection(self, ctx: StateContext, input_image_path, det_m1, det_m2) -> FrameResult:
@@ -176,4 +183,5 @@ class ThreeState(AdrodState):
             detections=result,
             state=3,
             flops=sum(FLOPs_Dict[m] for m in [ctx.m1, ctx.m2, ctx.m3]),
+            version_detections=dets,
         )

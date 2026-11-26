@@ -19,6 +19,8 @@ class ExecutionRecorder:
 
     def __init__(self) -> None:
         self.detection_record:  list[list[DetectionBoundingBox]] = []
+        # フレームごとの、実行した各モデルの統合前の検出結果（Cov_OD / Cer_OD 用）
+        self.version_detection_record: list[dict[str, list[DetectionBoundingBox]]] = []
         self.exe_state_record:  list[AdrodState] = []
         self.total_flops:       float = 0.0
         self.yolov8n_cost:      float = 17400.0
@@ -27,6 +29,7 @@ class ExecutionRecorder:
 
     def record_frame_result(self, frame_result: FrameResult) -> None:
         self.detection_record.append(frame_result.detections)
+        self.version_detection_record.append(frame_result.version_detections)
         self.exe_state_record.append(frame_result.state)
         self.total_flops += frame_result.flops
     
@@ -52,6 +55,9 @@ class ExecutionRecorder:
 
     def get_detections(self) -> list[list[DetectionBoundingBox]]:
         return self.detection_record
+
+    def get_version_detections(self) -> list[dict[str, list[DetectionBoundingBox]]]:
+        return self.version_detection_record
 
     def get_execution_states(self) -> list[AdrodState]:
         return self.exe_state_record
@@ -79,5 +85,6 @@ class ExecutionRecorder:
     
     def reset(self) -> None:
         self.detection_record = []
+        self.version_detection_record = []
         self.exe_state_record = []
         self.total_flops = 0.0
